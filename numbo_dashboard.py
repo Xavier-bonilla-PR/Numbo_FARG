@@ -592,10 +592,11 @@ def render_canvas(snap: StepSnapshot):
             target = snap.problem_target
             is_solved = target is not None and target is not None and target in cr.avails
             border_color = "#55A868" if is_solved else "#888"
-            bg = "#e8f5e9" if is_solved else "#f8f9fa"
+            bg = "#1a4d2e" if is_solved else "#2a2a3e"
+            text_color = "#90ee90" if is_solved else "#cdd6f4"
             st.markdown(
                 f"<div style='border:2px solid {border_color};border-radius:8px;"
-                f"padding:8px;background:{bg};text-align:center'>"
+                f"padding:8px;background:{bg};text-align:center;color:{text_color}'>"
                 f"<b>{label}</b><br>"
                 f"<span style='font-size:1.2em'>[{avails_str}]</span>"
                 f"{'<br>🎯 TARGET!' if is_solved else ''}"
@@ -605,6 +606,62 @@ def render_canvas(snap: StepSnapshot):
         if i < len(snap.canvas_states) - 1:
             cols[i + 1].markdown("<div style='text-align:center;font-size:2em;padding-top:20px'>→</div>",
                                  unsafe_allow_html=True)
+
+
+def render_floating_nav(idx: int, total: int):
+    """Inject a fixed bottom-left ◀ ▶ timestep navigator via HTML + JS."""
+    st.markdown(
+        f"""
+        <div id="fnav" style="
+            position:fixed; bottom:24px; left:24px; z-index:9999;
+            background:rgba(18,18,36,0.93); border:2px solid #55A868;
+            border-radius:14px; padding:8px 14px;
+            display:flex; gap:10px; align-items:center;
+            backdrop-filter:blur(6px); box-shadow:0 4px 16px rgba(0,0,0,0.5);
+        ">
+          <button id="fnav-prev" title="Previous timestep" style="
+              background:#2a2a4e; color:#cdd6f4; border:1px solid #55A868;
+              border-radius:8px; font-size:1.3em; width:36px; height:36px;
+              cursor:pointer; line-height:1;
+          ">◀</button>
+          <span id="fnav-label" style="color:#cdd6f4; font-size:0.9em; min-width:52px; text-align:center;">
+              t = {idx}
+          </span>
+          <button id="fnav-next" title="Next timestep" style="
+              background:#2a2a4e; color:#cdd6f4; border:1px solid #55A868;
+              border-radius:8px; font-size:1.3em; width:36px; height:36px;
+              cursor:pointer; line-height:1;
+          ">▶</button>
+        </div>
+        <script>
+        (function() {{
+          function getSlider() {{
+            return document.querySelector('[data-testid="stSlider"] input[type="range"]');
+          }}
+          function nudge(delta) {{
+            var sl = getSlider();
+            if (!sl) return;
+            var min = parseInt(sl.min) || 0;
+            var max = parseInt(sl.max) || 0;
+            var val = parseInt(sl.value);
+            var newVal = Math.max(min, Math.min(max, val + delta));
+            if (newVal === val) return;
+            var setter = Object.getOwnPropertyDescriptor(
+                window.HTMLInputElement.prototype, 'value').set;
+            setter.call(sl, newVal);
+            sl.dispatchEvent(new Event('input', {{bubbles: true}}));
+            var lbl = document.getElementById('fnav-label');
+            if (lbl) lbl.textContent = 't = ' + newVal;
+          }}
+          var prev = document.getElementById('fnav-prev');
+          var next = document.getElementById('fnav-next');
+          if (prev) prev.onclick = function() {{ nudge(-1); }};
+          if (next) next.onclick = function() {{ nudge(+1); }};
+        }})();
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_imcells(snap: StepSnapshot):
@@ -1186,6 +1243,9 @@ def main():
     dummy_snap = history[-1]
     idx = render_navigator(dummy_snap, len(history))
     snap = history[idx]
+
+    # Floating ◀ ▶ nav pinned to bottom-left
+    render_floating_nav(idx, len(history))
 
     st.markdown("---")
 
