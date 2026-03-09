@@ -609,35 +609,64 @@ def render_canvas(snap: StepSnapshot):
 
 
 def render_floating_nav(idx: int, total: int):
-    """Inject a fixed bottom-left ◀ ▶ timestep navigator via HTML + JS."""
-    st.markdown(
+    """Inject a fixed bottom-left ◀ ▶ timestep navigator.
+
+    Uses st.components.v1.html so the <script> actually executes.
+    The iframe injects a floating div into window.parent.document and
+    drives the Streamlit slider via React's synthetic input event.
+    """
+    import streamlit.components.v1 as components
+    components.html(
         f"""
-        <div id="fnav" style="
-            position:fixed; bottom:24px; left:24px; z-index:9999;
-            background:rgba(18,18,36,0.93); border:2px solid #55A868;
-            border-radius:14px; padding:8px 14px;
-            display:flex; gap:10px; align-items:center;
-            backdrop-filter:blur(6px); box-shadow:0 4px 16px rgba(0,0,0,0.5);
-        ">
-          <button id="fnav-prev" title="Previous timestep" style="
-              background:#2a2a4e; color:#cdd6f4; border:1px solid #55A868;
-              border-radius:8px; font-size:1.3em; width:36px; height:36px;
-              cursor:pointer; line-height:1;
-          ">◀</button>
-          <span id="fnav-label" style="color:#cdd6f4; font-size:0.9em; min-width:52px; text-align:center;">
-              t = {idx}
-          </span>
-          <button id="fnav-next" title="Next timestep" style="
-              background:#2a2a4e; color:#cdd6f4; border:1px solid #55A868;
-              border-radius:8px; font-size:1.3em; width:36px; height:36px;
-              cursor:pointer; line-height:1;
-          ">▶</button>
-        </div>
         <script>
         (function() {{
+          var doc = window.parent.document;
+
+          // Remove any previous instance so reruns don't duplicate it
+          var old = doc.getElementById('fnav');
+          if (old) old.remove();
+
+          // Create the floating pill
+          var nav = doc.createElement('div');
+          nav.id = 'fnav';
+          nav.style.cssText = [
+            'position:fixed', 'bottom:24px', 'left:24px', 'z-index:9999',
+            'background:rgba(18,18,36,0.93)', 'border:2px solid #55A868',
+            'border-radius:14px', 'padding:8px 14px',
+            'display:flex', 'gap:10px', 'align-items:center',
+            'backdrop-filter:blur(6px)', 'box-shadow:0 4px 16px rgba(0,0,0,0.5)',
+          ].join(';');
+
+          var btnStyle = [
+            'background:#2a2a4e', 'color:#cdd6f4', 'border:1px solid #55A868',
+            'border-radius:8px', 'font-size:1.3em', 'width:36px', 'height:36px',
+            'cursor:pointer', 'line-height:1',
+          ].join(';');
+
+          var prevBtn = doc.createElement('button');
+          prevBtn.title = 'Previous timestep';
+          prevBtn.style.cssText = btnStyle;
+          prevBtn.textContent = '◀';
+
+          var label = doc.createElement('span');
+          label.id = 'fnav-label';
+          label.style.cssText = 'color:#cdd6f4;font-size:0.9em;min-width:52px;text-align:center';
+          label.textContent = 't = {idx}';
+
+          var nextBtn = doc.createElement('button');
+          nextBtn.title = 'Next timestep';
+          nextBtn.style.cssText = btnStyle;
+          nextBtn.textContent = '▶';
+
+          nav.appendChild(prevBtn);
+          nav.appendChild(label);
+          nav.appendChild(nextBtn);
+          doc.body.appendChild(nav);
+
           function getSlider() {{
-            return document.querySelector('[data-testid="stSlider"] input[type="range"]');
+            return doc.querySelector('[data-testid="stSlider"] input[type="range"]');
           }}
+
           function nudge(delta) {{
             var sl = getSlider();
             if (!sl) return;
@@ -646,21 +675,21 @@ def render_floating_nav(idx: int, total: int):
             var val = parseInt(sl.value);
             var newVal = Math.max(min, Math.min(max, val + delta));
             if (newVal === val) return;
-            var setter = Object.getOwnPropertyDescriptor(
-                window.HTMLInputElement.prototype, 'value').set;
-            setter.call(sl, newVal);
+            // React controlled input requires the native setter trick
+            var nativeSetter = Object.getOwnPropertyDescriptor(
+              window.parent.HTMLInputElement.prototype, 'value').set;
+            nativeSetter.call(sl, newVal);
             sl.dispatchEvent(new Event('input', {{bubbles: true}}));
-            var lbl = document.getElementById('fnav-label');
+            var lbl = doc.getElementById('fnav-label');
             if (lbl) lbl.textContent = 't = ' + newVal;
           }}
-          var prev = document.getElementById('fnav-prev');
-          var next = document.getElementById('fnav-next');
-          if (prev) prev.onclick = function() {{ nudge(-1); }};
-          if (next) next.onclick = function() {{ nudge(+1); }};
+
+          prevBtn.onclick = function() {{ nudge(-1); }};
+          nextBtn.onclick = function() {{ nudge(+1); }};
         }})();
         </script>
         """,
-        unsafe_allow_html=True,
+        height=0,
     )
 
 
