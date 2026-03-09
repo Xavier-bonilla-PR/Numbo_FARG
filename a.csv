@@ -1,0 +1,508 @@
+1,"SeqCanvas((4 5 6))",0.879370663615471
+1,"Want(15)",1.4074521924913097
+1,"Detector(15, RaiseException(SolvedNumble))",0.8740845882548458
+1,"GettingCloser.Tagger(target=15)",0.8740845882548458
+1,"Consume(- 4 4, source=canvas[0])",0.08055587592043055
+1,"canvas[0]",0.26933430679428005
+1,"Consume(- 5 4, source=canvas[0])",0.08091881984869105
+1,"Consume(- 6 4, source=canvas[0])",0.08095041967906277
+1,"Consume(- 5 5, source=canvas[0])",0.08055587592043055
+1,"Consume(- 6 5, source=canvas[0])",0.08091881984869105
+1,"Consume(- 6 6, source=canvas[0])",0.08055587592043055
+2,"SeqCanvas((4 5 6))",0.8093257272884261
+2,"Want(15)",1.649587817648433
+2,"Detector(15, RaiseException(SolvedNumble))",0.7859040429536075
+2,"GettingCloser.Tagger(target=15)",0.7859040429536075
+2,"Consume(- 4 4, source=canvas[0])",0.07444320099468389
+2,"canvas[0]",0.3537168487930152
+2,"Consume(- 5 4, source=canvas[0])",0.08333593299618766
+2,"Consume(- 6 4, source=canvas[0])",0.07528039990123435
+2,"Consume(- 5 5, source=canvas[0])",0.07444320099468389
+2,"Consume(- 6 5, source=canvas[0])",0.0752133452832498
+2,"Consume(- 6 6, source=canvas[0])",0.07444320099468389
+2,"ImCell(5 - 4 = 1 (6 1))",0.1256021845374181
+2,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.8170728068875467
+3,"SeqCanvas((4 5 6))",0.7671514071092408
+3,"Want(15)",1.8170660592283563
+3,"Detector(15, RaiseException(SolvedNumble))",0.7228971000393122
+3,"GettingCloser.Tagger(target=15)",0.7228971000393122
+3,"Consume(- 4 4, source=canvas[0])",0.07352910683683957
+3,"canvas[0]",0.417609606447386
+3,"Consume(- 5 4, source=canvas[0])",0.09333474050400764
+3,"Consume(- 6 4, source=canvas[0])",0.07481098233868805
+3,"Consume(- 5 5, source=canvas[0])",0.07352910683683957
+3,"Consume(- 6 5, source=canvas[0])",0.0747083090217603
+3,"Consume(- 6 6, source=canvas[0])",0.07352910683683957
+3,"ImCell(5 - 4 = 1 (6 1))",0.15946611723401222
+3,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.6676079717550942
+4,"SeqCanvas((4 5 6))",0.743277698129591
+4,"Want(15)",1.925267172611793
+4,"Detector(15, RaiseException(SolvedNumble))",0.6773933141036033
+4,"GettingCloser.Tagger(target=15)",0.6773933141036033
+4,"Consume(- 4 4, source=canvas[0])",0.057519669474655026
+4,"canvas[0]",0.4611650923848649
+4,"Consume(- 5 4, source=canvas[0])",0.10863355525544892
+4,"Consume(- 6 4, source=canvas[0])",0.0785410162315621
+4,"Consume(- 5 5, source=canvas[0])",0.0768341215519647
+4,"Consume(- 6 5, source=canvas[0])",0.07840429661104553
+4,"Consume(- 6 6, source=canvas[0])",0.0768341215519647
+4,"ImCell(5 - 4 = 1 (6 1))",0.18645395473871387
+4,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.5454843193824369
+4,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.06439129812517312
+5,"SeqCanvas((4 5 6))",0.7338208889803641
+5,"Want(15)",2.0059291008349365
+5,"Detector(15, RaiseException(SolvedNumble))",0.6464667317100685
+5,"GettingCloser.Tagger(target=15)",0.6464667317100685
+5,"Consume(- 4 4, source=canvas[0])",0.06583546561590388
+5,"canvas[0]",0.5020851406497311
+5,"Consume(- 5 4, source=canvas[0])",0.12503433978651676
+5,"Consume(- 6 4, source=canvas[0])",0.08300840800218452
+5,"Consume(- 5 5, source=canvas[0])",0.08089182760980745
+5,"Consume(- 6 5, source=canvas[0])",0.08283886814778418
+5,"Consume(- 6 6, source=canvas[0])",0.08089182760980745
+5,"ImCell(5 - 4 = 1 (6 1))",0.20908158871325414
+5,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.44570040395095073
+5,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.05828070618416521
+6,"SeqCanvas((4 5 6))",0.7322221647924061
+6,"Want(15)",2.0568673569199802
+6,"Detector(15, RaiseException(SolvedNumble))",0.6240668579983124
+6,"GettingCloser.Tagger(target=15)",0.6240668579983124
+6,"Consume(- 4 4, source=canvas[0])",0.07392121197704195
+6,"canvas[0]",0.5310354968923751
+6,"Consume(- 5 4, source=canvas[0])",0.14319875670718973
+6,"Consume(- 6 4, source=canvas[0])",0.08927013960922385
+6,"Consume(- 5 5, source=canvas[0])",0.06551118049276652
+6,"Consume(- 6 5, source=canvas[0])",0.08907074796123811
+6,"Consume(- 6 6, source=canvas[0])",0.08678095591720614
+6,"ImCell(5 - 4 = 1 (6 1))",0.22897125413073405
+6,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.3641696800871167
+6,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.05404522444350924
+6,"Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5)))",0.07095312701079362
+7,"SeqCanvas((4 5 6))",0.7553734376363946
+7,"Want(15)",4.0
+7,"Detector(15, RaiseException(SolvedNumble))",0.6215803299301336
+7,"GettingCloser.Tagger(target=15)",0.6215803299301336
+7,"Consume(- 4 4, source=canvas[0])",0.0
+7,"canvas[0]",2.0
+7,"Consume(- 5 4, source=canvas[0])",0.0
+7,"Consume(- 6 4, source=canvas[0])",0.0
+7,"Consume(- 5 5, source=canvas[0])",0.0
+7,"Consume(- 6 5, source=canvas[0])",0.0
+7,"Consume(- 6 6, source=canvas[0])",0.0
+7,"ImCell(5 - 4 = 1 (6 1))",0.24115924714936895
+7,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.2975531426921204
+7,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.04658888395898315
+7,"Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5)))",0.05998954638968937
+7,"Consume(+ 4 4, source=canvas[0])",0.0
+7,"Consume(+ 5 4, source=canvas[0])",0.0
+7,"Consume(+ 6 4, source=canvas[0])",0.0
+7,"Consume(+ 5 5, source=canvas[0])",0.0
+7,"Consume(+ 6 5, source=canvas[0])",0.0
+7,"Consume(+ 6 6, source=canvas[0])",0.0
+8,"SeqCanvas((4 5 6))",0.8176163213786596
+8,"Want(15)",4.0
+8,"Detector(15, RaiseException(SolvedNumble))",0.6540884180764348
+8,"GettingCloser.Tagger(target=15)",0.6540884180764348
+8,"Consume(- 4 4, source=canvas[0])",0.0
+8,"canvas[0]",2.0
+8,"Consume(- 5 4, source=canvas[0])",0.0
+8,"Consume(- 6 4, source=canvas[0])",0.0
+8,"Consume(- 5 5, source=canvas[0])",0.0
+8,"Consume(- 6 5, source=canvas[0])",0.0
+8,"Consume(- 6 6, source=canvas[0])",0.0
+8,"ImCell(5 - 4 = 1 (6 1))",0.24609443819136143
+8,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.24312258149766156
+8,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.03806651018612456
+8,"Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5)))",0.05956965447701079
+8,"Consume(+ 4 4, source=canvas[0])",0.0
+8,"Consume(+ 5 4, source=canvas[0])",0.0
+8,"Consume(+ 6 4, source=canvas[0])",0.0
+8,"Consume(+ 5 5, source=canvas[0])",0.0
+8,"Consume(+ 6 5, source=canvas[0])",0.0
+8,"Consume(+ 6 6, source=canvas[0])",0.0
+8,"Detector((5,), MakeAgentSeq(tail=Consume(- 5 5, source=canvas[0])))",0.054524047340878706
+8,"Consume(- 5 None, source=canvas[0])",0.0
+8,"GoIsDone(Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5))))",0.8170728068875467
+9,"SeqCanvas((4 5 6))",0.7998277742835935
+9,"Want(15)",4.0
+9,"Detector(15, RaiseException(SolvedNumble))",0.612083754290403
+9,"GettingCloser.Tagger(target=15)",0.612083754290403
+9,"Consume(- 4 4, source=canvas[0])",0.0
+9,"canvas[0]",2.0
+9,"Consume(- 5 4, source=canvas[0])",0.0
+9,"Consume(- 6 4, source=canvas[0])",0.0
+9,"Consume(- 5 5, source=canvas[0])",0.0
+9,"Consume(- 6 5, source=canvas[0])",0.0
+9,"Consume(- 6 6, source=canvas[0])",0.0
+9,"ImCell(5 - 4 = 1 (6 1))",0.25163314275991
+9,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.19864885008204067
+9,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.031103110326190172
+9,"Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5)))",0.05830311445291636
+9,"Consume(+ 4 4, source=canvas[0])",0.0
+9,"Consume(+ 5 4, source=canvas[0])",0.0
+9,"Consume(+ 6 4, source=canvas[0])",0.0
+9,"Consume(+ 5 5, source=canvas[0])",0.0
+9,"Consume(+ 6 5, source=canvas[0])",0.0
+9,"Consume(+ 6 6, source=canvas[0])",0.0
+9,"Detector((5,), MakeAgentSeq(tail=Consume(- 5 5, source=canvas[0])))",0.04997791513361698
+9,"Consume(- 5 None, source=canvas[0])",0.0
+9,"GoIsDone(Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5))))",0.6676079717550942
+10,"SeqCanvas((4 5 6))",0.7855468506164681
+10,"Want(15)",4.0
+10,"Detector(15, RaiseException(SolvedNumble))",0.5774822738244103
+10,"GettingCloser.Tagger(target=15)",0.5774822738244103
+10,"Consume(- 4 4, source=canvas[0])",0.0
+10,"canvas[0]",2.0
+10,"Consume(- 5 4, source=canvas[0])",0.0
+10,"Consume(- 6 4, source=canvas[0])",0.0
+10,"Consume(- 5 5, source=canvas[0])",0.0
+10,"Consume(- 6 5, source=canvas[0])",0.0
+10,"Consume(- 6 6, source=canvas[0])",0.0
+10,"ImCell(5 - 4 = 1 (6 1))",0.25517592856370724
+10,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.16231057352151648
+10,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.025413505657153248
+10,"Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5)))",0.05649241143013644
+10,"Consume(+ 4 4, source=canvas[0])",0.0
+10,"Consume(+ 5 4, source=canvas[0])",0.0
+10,"Consume(+ 6 4, source=canvas[0])",0.0
+10,"Consume(+ 5 5, source=canvas[0])",0.0
+10,"Consume(+ 6 5, source=canvas[0])",0.0
+10,"Consume(+ 6 6, source=canvas[0])",0.0
+10,"Detector((5,), MakeAgentSeq(tail=Consume(- 5 5, source=canvas[0])))",0.04611946726182335
+10,"Consume(- 5 None, source=canvas[0])",0.0
+10,"GoIsDone(Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5))))",0.5454843193824369
+10,"Blocked(Consume(+ 6 6, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (6, None), (None, 6)))",0.0
+10,"ActIsDone(Consume(+ 6 6, source=canvas[0]))",0.8170728068875467
+11,"SeqCanvas((4 5 6))",0.7721081732310175
+11,"Want(15)",4.0
+11,"Detector(15, RaiseException(SolvedNumble))",0.5489791900588262
+11,"GettingCloser.Tagger(target=15)",0.5489791900588262
+11,"Consume(- 4 4, source=canvas[0])",0.0
+11,"canvas[0]",2.0
+11,"Consume(- 5 4, source=canvas[0])",0.0
+11,"Consume(- 6 4, source=canvas[0])",0.0
+11,"Consume(- 5 5, source=canvas[0])",0.0
+11,"Consume(- 6 5, source=canvas[0])",0.0
+11,"Consume(- 6 6, source=canvas[0])",0.0
+11,"ImCell(5 - 4 = 1 (6 1))",0.257217404816115
+11,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.132619555894753
+11,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.02521955173604519
+11,"Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5)))",0.05434839529147427
+11,"Consume(+ 4 4, source=canvas[0])",0.0
+11,"Consume(+ 5 4, source=canvas[0])",0.0
+11,"Consume(+ 6 4, source=canvas[0])",0.0
+11,"Consume(+ 5 5, source=canvas[0])",0.0
+11,"Consume(+ 6 5, source=canvas[0])",0.0
+11,"Consume(+ 6 6, source=canvas[0])",0.0
+11,"Detector((5,), MakeAgentSeq(tail=Consume(- 5 5, source=canvas[0])))",0.04278296638136646
+11,"Consume(- 5 None, source=canvas[0])",0.0
+11,"GoIsDone(Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5))))",0.44570040395095073
+11,"Blocked(Consume(+ 6 6, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (6, None), (None, 6)))",0.0
+11,"ActIsDone(Consume(+ 6 6, source=canvas[0]))",0.6676079717550942
+11,"Detector((4,), MakeAgentSeq(tail=Consume(- 4 4, source=canvas[0])))",0.023089760850090502
+11,"Consume(- 4 None, source=canvas[0])",0.0
+11,"GoIsDone(Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4))))",0.8170728068875467
+12,"SeqCanvas((4 5 6))",0.7348845492260269
+12,"Want(15)",4.0
+12,"Detector(15, RaiseException(SolvedNumble))",0.49989886540361544
+12,"GettingCloser.Tagger(target=15)",0.49989886540361544
+12,"Consume(- 4 4, source=canvas[0])",0.0
+12,"canvas[0]",2.0
+12,"Consume(- 5 4, source=canvas[0])",0.0
+12,"Consume(- 6 4, source=canvas[0])",0.0
+12,"Consume(- 5 5, source=canvas[0])",0.0
+12,"Consume(- 6 5, source=canvas[0])",0.0
+12,"Consume(- 6 6, source=canvas[0])",0.0
+12,"ImCell(5 - 4 = 1 (6 1))",0.2573338438272127
+12,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.10835983278310574
+12,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.02466994594368084
+12,"Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5)))",0.052017276223724804
+12,"Consume(+ 4 4, source=canvas[0])",0.0
+12,"Consume(+ 5 4, source=canvas[0])",0.0
+12,"Consume(+ 6 4, source=canvas[0])",0.0
+12,"Consume(+ 5 5, source=canvas[0])",0.0
+12,"Consume(+ 6 5, source=canvas[0])",0.0
+12,"Consume(+ 6 6, source=canvas[0])",0.0
+12,"Detector((5,), MakeAgentSeq(tail=Consume(- 5 5, source=canvas[0])))",0.03984935700741456
+12,"Consume(- 5 None, source=canvas[0])",0.0
+12,"GoIsDone(Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5))))",0.3641696800871167
+12,"Blocked(Consume(+ 6 6, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (6, None), (None, 6)))",0.0
+12,"ActIsDone(Consume(+ 6 6, source=canvas[0]))",0.5454843193824369
+12,"Detector((4,), MakeAgentSeq(tail=Consume(- 4 4, source=canvas[0])))",0.0211564491911852
+12,"Consume(- 4 None, source=canvas[0])",0.0
+12,"GoIsDone(Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4))))",0.6676079717550942
+13,"SeqCanvas((4 5 6))",0.704045644764127
+13,"Want(15)",4.0
+13,"Detector(15, RaiseException(SolvedNumble))",0.459577888267109
+13,"GettingCloser.Tagger(target=15)",0.459577888267109
+13,"Consume(- 4 4, source=canvas[0])",0.0
+13,"canvas[0]",2.0
+13,"Consume(- 5 4, source=canvas[0])",0.0
+13,"Consume(- 6 4, source=canvas[0])",0.0
+13,"Consume(- 5 5, source=canvas[0])",0.0
+13,"Consume(- 6 5, source=canvas[0])",0.0
+13,"Consume(- 6 6, source=canvas[0])",0.0
+13,"ImCell(5 - 4 = 1 (6 1))",0.25529054457067446
+13,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.08853787272595742
+13,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.023892364811265658
+13,"Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5)))",0.049599716751717995
+13,"Consume(+ 4 4, source=canvas[0])",0.0
+13,"Consume(+ 5 4, source=canvas[0])",0.0
+13,"Consume(+ 6 4, source=canvas[0])",0.0
+13,"Consume(+ 5 5, source=canvas[0])",0.0
+13,"Consume(+ 6 5, source=canvas[0])",0.0
+13,"Consume(+ 6 6, source=canvas[0])",0.0
+13,"Detector((5,), MakeAgentSeq(tail=Consume(- 5 5, source=canvas[0])))",0.037232659867717344
+13,"Consume(- 5 None, source=canvas[0])",0.0
+13,"GoIsDone(Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5))))",0.2975531426921204
+13,"Blocked(Consume(+ 6 6, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (6, None), (None, 6)))",0.0
+13,"ActIsDone(Consume(+ 6 6, source=canvas[0]))",0.44570040395095073
+13,"Detector((4,), MakeAgentSeq(tail=Consume(- 4 4, source=canvas[0])))",0.01951545553498649
+13,"Consume(- 4 None, source=canvas[0])",0.0
+13,"GoIsDone(Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4))))",0.5454843193824369
+13,"Blocked(Consume(+ 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.0
+14,"SeqCanvas((4 5 6))",0.6783045201917189
+14,"Want(15)",4.0
+14,"Detector(15, RaiseException(SolvedNumble))",0.4264529811141146
+14,"GettingCloser.Tagger(target=15)",0.4264529811141146
+14,"Consume(- 4 4, source=canvas[0])",0.0
+14,"canvas[0]",2.0
+14,"Consume(- 5 4, source=canvas[0])",0.0
+14,"Consume(- 6 4, source=canvas[0])",0.0
+14,"Consume(- 5 5, source=canvas[0])",0.0
+14,"Consume(- 6 5, source=canvas[0])",0.0
+14,"Consume(- 6 6, source=canvas[0])",0.0
+14,"ImCell(5 - 4 = 1 (6 1))",0.2518354010666439
+14,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.07234188818405042
+14,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.02297572528561488
+14,"Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5)))",0.04716432681286779
+14,"Consume(+ 4 4, source=canvas[0])",0.0
+14,"Consume(+ 5 4, source=canvas[0])",0.0
+14,"Consume(+ 6 4, source=canvas[0])",0.0
+14,"Consume(+ 5 5, source=canvas[0])",0.0
+14,"Consume(+ 6 5, source=canvas[0])",0.0
+14,"Consume(+ 6 6, source=canvas[0])",0.0
+14,"Detector((5,), MakeAgentSeq(tail=Consume(- 5 5, source=canvas[0])))",0.034870358943609125
+14,"Consume(- 5 None, source=canvas[0])",0.0
+14,"GoIsDone(Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5))))",0.24312258149766156
+14,"Blocked(Consume(+ 6 6, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (6, None), (None, 6)))",0.0
+14,"ActIsDone(Consume(+ 6 6, source=canvas[0]))",0.3641696800871167
+14,"Detector((4,), MakeAgentSeq(tail=Consume(- 4 4, source=canvas[0])))",0.018096542246234765
+14,"Consume(- 4 None, source=canvas[0])",0.0
+14,"GoIsDone(Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4))))",0.44570040395095073
+14,"Blocked(Consume(+ 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.0
+15,"SeqCanvas((4 5 6))",0.6576209138789951
+15,"Want(15)",4.0
+15,"Detector(15, RaiseException(SolvedNumble))",0.3992398639771035
+15,"GettingCloser.Tagger(target=15)",0.3992398639771035
+15,"Consume(- 4 4, source=canvas[0])",0.0020157807754140507
+15,"canvas[0]",2.0
+15,"Consume(- 5 4, source=canvas[0])",0.0
+15,"Consume(- 6 4, source=canvas[0])",0.0
+15,"Consume(- 5 5, source=canvas[0])",0.004195251290530152
+15,"Consume(- 6 5, source=canvas[0])",0.0
+15,"Consume(- 6 6, source=canvas[0])",0.0
+15,"ImCell(5 - 4 = 1 (6 1))",0.23707304724919706
+15,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.05910858963408712
+15,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.022095280515233646
+15,"Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5)))",0.04499300090599559
+15,"Consume(+ 4 4, source=canvas[0])",0.0
+15,"Consume(+ 5 4, source=canvas[0])",0.0
+15,"Consume(+ 6 4, source=canvas[0])",0.0
+15,"Consume(+ 5 5, source=canvas[0])",0.0
+15,"Consume(+ 6 5, source=canvas[0])",0.0
+15,"Consume(+ 6 6, source=canvas[0])",0.0
+15,"Detector((5,), MakeAgentSeq(tail=Consume(- 5 5, source=canvas[0])))",0.032722957420958515
+15,"Consume(- 5 None, source=canvas[0])",0.0
+15,"GoIsDone(Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5))))",0.19864885008204067
+15,"Blocked(Consume(+ 6 6, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (6, None), (None, 6)))",0.0
+15,"ActIsDone(Consume(+ 6 6, source=canvas[0]))",0.2975531426921204
+15,"Detector((4,), MakeAgentSeq(tail=Consume(- 4 4, source=canvas[0])))",0.016852279784868685
+15,"Consume(- 4 None, source=canvas[0])",0.0
+15,"GoIsDone(Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4))))",0.3641696800871167
+15,"Blocked(Consume(+ 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.0
+15,"ImCell(6 + 4 = 10 (5 10))",0.030602266068990223
+15,"GoIsDone(Consume(+ 6 4, source=canvas[0]))",0.8170728068875467
+16,"SeqCanvas((4 5 6))",0.6384726637849916
+16,"Want(15)",4.0
+16,"Detector(15, RaiseException(SolvedNumble))",0.3692732786406491
+16,"GettingCloser.Tagger(target=15)",0.3692732786406491
+16,"Consume(- 4 4, source=canvas[0])",0.0
+16,"canvas[0]",2.0
+16,"Consume(- 5 4, source=canvas[0])",0.0
+16,"Consume(- 6 4, source=canvas[0])",0.0
+16,"Consume(- 5 5, source=canvas[0])",0.0
+16,"Consume(- 6 5, source=canvas[0])",0.0
+16,"Consume(- 6 6, source=canvas[0])",0.0
+16,"ImCell(5 - 4 = 1 (6 1))",0.2239886837126894
+16,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.04829602124348771
+16,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.021067916053609418
+16,"Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5)))",0.042648595491719246
+16,"Consume(+ 4 4, source=canvas[0])",0.0
+16,"Consume(+ 5 4, source=canvas[0])",0.0
+16,"Consume(+ 6 4, source=canvas[0])",0.0
+16,"Consume(+ 5 5, source=canvas[0])",0.0
+16,"Consume(+ 6 5, source=canvas[0])",0.0
+16,"Consume(+ 6 6, source=canvas[0])",0.0
+16,"Detector((5,), MakeAgentSeq(tail=Consume(- 5 5, source=canvas[0])))",0.03076650096891311
+16,"Consume(- 5 None, source=canvas[0])",0.0
+16,"GoIsDone(Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5))))",0.16231057352151648
+16,"Blocked(Consume(+ 6 6, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (6, None), (None, 6)))",0.0
+16,"ActIsDone(Consume(+ 6 6, source=canvas[0]))",0.24312258149766156
+16,"Detector((4,), MakeAgentSeq(tail=Consume(- 4 4, source=canvas[0])))",0.015750963793654964
+16,"Consume(- 4 None, source=canvas[0])",0.0
+16,"GoIsDone(Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4))))",0.2975531426921204
+16,"Blocked(Consume(+ 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.0
+16,"ImCell(6 + 4 = 10 (5 10))",0.2403275597102389
+16,"GoIsDone(Consume(+ 6 4, source=canvas[0]))",0.6676079717550942
+16,"GettingCloser(ImCell(6 + 4 = 10 (5 10)), target=15, weight=0.4444444444444444)",1.0288902725091253
+17,"SeqCanvas((4 5 6))",0.6323997446514567
+17,"Want(15)",4.0
+17,"Detector(15, RaiseException(SolvedNumble))",0.3446748803311389
+17,"GettingCloser.Tagger(target=15)",0.3446748803311389
+17,"Consume(- 4 4, source=canvas[0])",0.0
+17,"canvas[0]",2.0
+17,"Consume(- 5 4, source=canvas[0])",0.0
+17,"Consume(- 6 4, source=canvas[0])",0.0
+17,"Consume(- 5 5, source=canvas[0])",0.0
+17,"Consume(- 6 5, source=canvas[0])",0.0
+17,"Consume(- 6 6, source=canvas[0])",0.0
+17,"ImCell(5 - 4 = 1 (6 1))",0.2126705456337287
+17,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.03946136563891709
+17,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.020014551077095093
+17,"Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5)))",0.040340836757287786
+17,"Consume(+ 4 4, source=canvas[0])",0.0
+17,"Consume(+ 5 4, source=canvas[0])",0.0
+17,"Consume(+ 6 4, source=canvas[0])",0.0
+17,"Consume(+ 5 5, source=canvas[0])",0.0
+17,"Consume(+ 6 5, source=canvas[0])",0.0
+17,"Consume(+ 6 6, source=canvas[0])",0.0
+17,"Detector((5,), MakeAgentSeq(tail=Consume(- 5 5, source=canvas[0])))",0.028951412064269405
+17,"Consume(- 5 None, source=canvas[0])",0.0
+17,"GoIsDone(Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5))))",0.132619555894753
+17,"Blocked(Consume(+ 6 6, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (6, None), (None, 6)))",0.0
+17,"ActIsDone(Consume(+ 6 6, source=canvas[0]))",0.19864885008204067
+17,"Detector((4,), MakeAgentSeq(tail=Consume(- 4 4, source=canvas[0])))",0.014754471928256215
+17,"Consume(- 4 None, source=canvas[0])",0.0
+17,"GoIsDone(Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4))))",0.24312258149766156
+17,"Blocked(Consume(+ 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.0
+17,"ImCell(6 + 4 = 10 (5 10))",0.4151919121590241
+17,"GoIsDone(Consume(+ 6 4, source=canvas[0]))",0.5454843193824369
+17,"GettingCloser(ImCell(6 + 4 = 10 (5 10)), target=15, weight=0.4444444444444444)",1.0661242070099253
+17,"Detector((4,), MakeAgentSeq(tail=Consume(+ 4 4, source=canvas[0])))",0.0
+17,"Consume(+ 4 None, source=canvas[0])",0.0
+17,"GoIsDone(Blocked(Consume(+ 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4))))",0.8170728068875467
+18,"SeqCanvas((4 5 6))",0.6327519627037783
+18,"Want(15)",4.0
+18,"Detector(15, RaiseException(SolvedNumble))",0.320508311521091
+18,"GettingCloser.Tagger(target=15)",0.320508311521091
+18,"Consume(- 4 4, source=canvas[0])",0.0
+18,"canvas[0]",2.0
+18,"Consume(- 5 4, source=canvas[0])",0.0
+18,"Consume(- 6 4, source=canvas[0])",0.0
+18,"Consume(- 5 5, source=canvas[0])",0.0
+18,"Consume(- 6 5, source=canvas[0])",0.0
+18,"Consume(- 6 6, source=canvas[0])",0.0
+18,"ImCell(5 - 4 = 1 (6 1))",0.20326099460806202
+18,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.03224280878620578
+18,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.018978557922249825
+18,"Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5)))",0.03813150041925891
+18,"Consume(+ 4 4, source=canvas[0])",0.0
+18,"Consume(+ 5 4, source=canvas[0])",0.0
+18,"Consume(+ 6 4, source=canvas[0])",0.0
+18,"Consume(+ 5 5, source=canvas[0])",0.0
+18,"Consume(+ 6 5, source=canvas[0])",0.0
+18,"Consume(+ 6 6, source=canvas[0])",0.0
+18,"Detector((5,), MakeAgentSeq(tail=Consume(- 5 5, source=canvas[0])))",0.027260184353517854
+18,"Consume(- 5 None, source=canvas[0])",0.0
+18,"GoIsDone(Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5))))",0.10835983278310574
+18,"Blocked(Consume(+ 6 6, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (6, None), (None, 6)))",0.0
+18,"ActIsDone(Consume(+ 6 6, source=canvas[0]))",0.16231057352151648
+18,"Detector((4,), MakeAgentSeq(tail=Consume(- 4 4, source=canvas[0])))",0.013844238149528423
+18,"Consume(- 4 None, source=canvas[0])",0.0
+18,"GoIsDone(Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4))))",0.19864885008204067
+18,"Blocked(Consume(+ 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.0
+18,"ImCell(6 + 4 = 10 (5 10))",0.5613467889978008
+18,"GoIsDone(Consume(+ 6 4, source=canvas[0]))",0.44570040395095073
+18,"GettingCloser(ImCell(6 + 4 = 10 (5 10)), target=15, weight=0.4444444444444444)",1.089145738643818
+18,"Detector((4,), MakeAgentSeq(tail=Consume(+ 4 4, source=canvas[0])))",0.0
+18,"Consume(+ 4 None, source=canvas[0])",0.0
+18,"GoIsDone(Blocked(Consume(+ 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4))))",0.6676079717550942
+19,"SeqCanvas((4 5 6))",0.6546013113361088
+19,"Want(15)",4.0
+19,"Detector(15, RaiseException(SolvedNumble))",0.3006794105099277
+19,"GettingCloser.Tagger(target=15)",0.3006794105099277
+19,"Consume(- 4 4, source=canvas[0])",0.0
+19,"canvas[0]",2.0
+19,"Consume(- 5 4, source=canvas[0])",0.0
+19,"Consume(- 6 4, source=canvas[0])",0.0
+19,"Consume(- 5 5, source=canvas[0])",0.0
+19,"Consume(- 6 5, source=canvas[0])",0.0
+19,"Consume(- 6 6, source=canvas[0])",0.0
+19,"ImCell(5 - 4 = 1 (6 1))",0.3844258351424603
+19,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.026344722276883607
+19,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.01797138386852501
+19,"Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5)))",0.036024328833899805
+19,"Consume(+ 4 4, source=canvas[0])",0.0
+19,"Consume(+ 5 4, source=canvas[0])",0.0
+19,"Consume(+ 6 4, source=canvas[0])",0.0
+19,"Consume(+ 5 5, source=canvas[0])",0.0
+19,"Consume(+ 6 5, source=canvas[0])",0.0
+19,"Consume(+ 6 6, source=canvas[0])",0.0
+19,"Detector((5,), MakeAgentSeq(tail=Consume(- 5 5, source=canvas[0])))",0.025679485572966496
+19,"Consume(- 5 None, source=canvas[0])",0.0
+19,"GoIsDone(Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5))))",0.08853787272595742
+19,"Blocked(Consume(+ 6 6, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (6, None), (None, 6)))",0.0
+19,"ActIsDone(Consume(+ 6 6, source=canvas[0]))",0.132619555894753
+19,"Detector((4,), MakeAgentSeq(tail=Consume(- 4 4, source=canvas[0])))",0.013006634400739082
+19,"Consume(- 4 None, source=canvas[0])",0.0
+19,"GoIsDone(Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4))))",0.16231057352151648
+19,"Blocked(Consume(+ 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.0
+19,"ImCell(6 + 4 = 10 (5 10))",0.8820295726218885
+19,"GoIsDone(Consume(+ 6 4, source=canvas[0]))",0.3641696800871167
+19,"GettingCloser(ImCell(6 + 4 = 10 (5 10)), target=15, weight=0.4444444444444444)",1.1240466139136416
+19,"Detector((4,), MakeAgentSeq(tail=Consume(+ 4 4, source=canvas[0])))",0.0
+19,"Consume(+ 4 None, source=canvas[0])",0.0
+19,"GoIsDone(Blocked(Consume(+ 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4))))",0.5454843193824369
+19,"Detector((6,), MakeAgentSeq(tail=Consume(+ 6 6, source=canvas[0])))",0.0
+19,"Consume(+ 6 None, source=canvas[0])",0.0
+19,"GoIsDone(Blocked(Consume(+ 6 6, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (6, None), (None, 6))))",0.8170728068875467
+20,"SeqCanvas((4 5 6))",0.7087896530628884
+20,"Want(15)",4.0
+20,"Detector(15, RaiseException(SolvedNumble))",0.2844096074443375
+20,"GettingCloser.Tagger(target=15)",0.2844096074443375
+20,"Consume(- 4 4, source=canvas[0])",0.0
+20,"canvas[0]",2.0
+20,"Consume(- 5 4, source=canvas[0])",0.0
+20,"Consume(- 6 4, source=canvas[0])",0.0
+20,"Consume(- 5 5, source=canvas[0])",0.0
+20,"Consume(- 6 5, source=canvas[0])",0.0
+20,"Consume(- 6 6, source=canvas[0])",0.0
+20,"ImCell(5 - 4 = 1 (6 1))",0.5378240710210705
+20,"GoIsDone(Consume(- 5 4, source=canvas[0]))",0.02152555617744617
+20,"Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.01700018415579731
+20,"Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5)))",0.034020148699866526
+20,"Consume(+ 4 4, source=canvas[0])",0.0
+20,"Consume(+ 5 4, source=canvas[0])",0.0
+20,"Consume(+ 6 4, source=canvas[0])",0.0
+20,"Consume(+ 5 5, source=canvas[0])",0.0
+20,"Consume(+ 6 5, source=canvas[0])",0.0
+20,"Consume(+ 6 6, source=canvas[0])",0.0
+20,"Detector((5,), MakeAgentSeq(tail=Consume(- 5 5, source=canvas[0])))",0.024198616711138883
+20,"Consume(- 5 None, source=canvas[0])",0.0
+20,"GoIsDone(Blocked(Consume(- 5 5, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (5, None), (None, 5))))",0.07234188818405042
+20,"Blocked(Consume(+ 6 6, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (6, None), (None, 6)))",0.0
+20,"ActIsDone(Consume(+ 6 6, source=canvas[0]))",0.10835983278310574
+20,"Detector((4,), MakeAgentSeq(tail=Consume(- 4 4, source=canvas[0])))",0.012231373953649684
+20,"Consume(- 4 None, source=canvas[0])",0.0
+20,"GoIsDone(Blocked(Consume(- 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4))))",0.132619555894753
+20,"Blocked(Consume(+ 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4)))",0.0
+20,"ImCell(6 + 4 = 10 (5 10))",1.1577771816363684
+20,"GoIsDone(Consume(+ 6 4, source=canvas[0]))",0.2975531426921204
+20,"GettingCloser(ImCell(6 + 4 = 10 (5 10)), target=15, weight=0.4444444444444444)",1.1737756952644118
+20,"Detector((4,), MakeAgentSeq(tail=Consume(+ 4 4, source=canvas[0])))",0.0
+20,"Consume(+ 4 None, source=canvas[0])",0.0
+20,"GoIsDone(Blocked(Consume(+ 4 4, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (4, None), (None, 4))))",0.44570040395095073
+20,"Detector((6,), MakeAgentSeq(tail=Consume(+ 6 6, source=canvas[0])))",0.0
+20,"Consume(+ 6 None, source=canvas[0])",0.0
+20,"GoIsDone(Blocked(Consume(+ 6 6, source=canvas[0]), (SeqState(avails=(4, 5, 6), last_move=None), (6, None), (None, 6))))",0.6676079717550942

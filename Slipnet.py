@@ -1,0 +1,399 @@
+# Slipnet.py -- Generic slipnet class
+
+from dataclasses import dataclass, field
+from typing import Union, List, Tuple, Dict, Set, FrozenSet, Iterable, Any, \
+    NewType, Type, ClassVar, Sequence, Callable, Hashable, Collection, \
+    Sequence
+from itertools import chain
+from copy import copy
+import operator
+from operator import itemgetter, attrgetter
+from heapq import nlargest
+import sys
+
+import networkx as nx  # type: ignore[import]
+
+from Propagator import Propagator, Delta
+from Indenting import Indenting, indent
+from Graph import Node
+from util import is_iter, as_iter, pts, pl, pr
+
+
+#NodeId = NewType('NodeId', int)
+
+'''
+class Node:
+    def features(self) -> Iterable[Hashable]:
+        return []
+'''
+
+@dataclass(frozen=True)
+class NodeA:
+    '''Node and activation.'''
+    node: Node
+    a: float
+
+    def __str__(self):
+        return f'{self.node!s:20s} {self.a:2.5f}'
+
+@dataclass(frozen=True)
+class NeighborW:
+    '''Neighbor node and edge weight.'''
+    neighbor: Node
+    weight: float
+
+@dataclass(frozen=True)
+class FeatureWrapper:
+    feature: Union[Hashable, None] = None
+    
+    def __str__(self):
+        return f'{self.__class__.__name__}({self.feature})'
+
+    def features(self):
+        yield self.feature
+
+class Before(FeatureWrapper):
+    pass
+
+class After(FeatureWrapper):
+    pass
+
+@dataclass
+class SlipnetPropagator(Propagator):
+    noise: float = 0.0  #0.005
+    max_total: float = 10.0
+    positive_feedback_rate: float = 0.5  # higher -> initial features matter more
+    sigmoid_p: float = 1.05  # higher -> sharper distinctions, more salience
+    num_iterations: int = 10
+    alpha: float = 0.95
+    inflation_constant: float = 5.0  # 2.0 is minimum
+    
+    def make_deltas(self, g, old_d):
+        #print() #DEBUG
+        return chain.from_iterable(
+            self.deltas_from(g, old_d, nodeid)
+                for nodeid in old_d
+        )
+
+    def INFLATIONARY_deltas_from(self, g, old_d, nodeid) \
+    -> List[Delta]:
+        '''Deltas from nodeid to its neighbors.'''
+        result: List[Delta] = []
+        nodeid_a = old_d.get(nodeid, 0.0)
+        for neighborid, edge_d in g.adj[nodeid].items():
+            weight = edge_d.get('weight', 1.0)
+            delta = Delta(
+                neighborid,
+                weight * nodeid_a,
+                nodeid
+            )
+            result.append(delta)
+        return result
+
+    def deltas_from(self, g, old_d, nodeid) \
+    -> List[Delta]:
+        '''Deltas from nodeid to its neighbors.
+
+        Outgoing weights are quasi-averaged in a way similar to that used by
+        Toby Tyrell, but the quasi-averaging is done on the outgoing edges
+        rather than the incoming edges. This might not work as well.'''
+        result: List[Delta] = []
+        nodeid_a = old_d.get(nodeid, 0.0)
+        nws: List[NeighborW] = g.incident_nws(nodeid)
+        num_edges = len(nws)
+#        wtotal = sum(nws, key=attrgetter('weight'))
+#        wmax = max(nws, key=attrgetter('weight'))
+#        alpha = 1.0 / num_edges**2
+        multiplier = self.inflation_constant / (
+            num_edges + self.inflation_constant - 1
+        )
+        for nw in nws:
+            delta = Delta(
+                nw.neighbor,
+                nodeid_a * nw.weight * multiplier,
+                nodeid
+            )
+            result.append(delta)
+        return result
+
+    def min_value(self, g, nodeid):
+        return 0.0
+
+class Slipnet(nx.Graph):
+
+    def __init__(self, nodes: Iterable[Node] = []):
+        super().__init__()
+        self.features: Set[Node] = set()
+        self.propagator = SlipnetPropagator()
+        self.add_layer2_nodes(nodes)
+
+    def ns(self, node) -> List[str]:
+        '''Returns list of neighbors represented as strings.'''
+        return [str(neighbor) for neighbor in self.neighbors(node)]
+
+    def weight(self, node1, node2) -> float:
+        '''Returns weight of the edge from node1 to node2, or 0.0 if no such
+        edge exists. It is not an error to pass a non-existent node.'''
+        try:
+            edge_d = self[node1][node2]
+        except KeyError:
+            return 0.0
+        return edge_d.get('weight', 0.0)
+
+    # TODO Mutual inhibition between layer-2 nodes
+    def add_layer2_nodes(self, nodes: Iterable[Node]):
+        for node in nodes:
+            self.add_node(node)
+            for f in as_iter(self.features_of(node)):
+                self.add_edge(f, node, weight=1.0)
+                self.features.add(f)
+
+    # TODO Limit to 2 levels of features
+    def xfeatures_of(self, x0) -> Set[Hashable]:
+        result = set()
+        visited = set()
+        to_visit = {x0}
+        print('XF', x0)
+        while to_visit:
+            next_to_visit = set()
+            for x in to_visit:
+                visited.add(x)
+                for f in self.features_of1(x):
+                    result.add(f)
+                    if f not in visited:
+                        next_to_visit.add(f)
+            to_visit = next_to_visit
+        return result
+
+    def features_of1(self, x) -> Iterable[Hashable]:
+        if hasattr(x, 'features'):
+            yield from x.features()
+        else:
+            yield from self.default_features(x)
+
+    features_of = features_of1
+
+    def default_features(self, x) -> Iterable[Hashable]:
+        '''Override this in subclasses.'''
+        if False:
+            yield None
+
+    # TODO UT, UT with non-existent node
+    def incident_nws(self, node: Hashable) -> List[NeighborW]:
+        try:
+            return [
+                NeighborW(neighbor, edge_d.get('weight', 1.0))
+                    for neighbor, edge_d in self.adj[node].items()
+            ]
+        except KeyError:
+            #print('INCNWS', node, len(self.nodes)) #DIAG
+            return []
+
+    def dquery(
+        self,
+        features: Iterable[Hashable]=None,
+        activations_in: Dict[Hashable, float]=None
+    ) -> Dict[Hashable, float]:
+        '''Pass either features or a dictionary of activations.
+        Returns dictionary of activations.'''
+        if activations_in is None:
+            activations_in = {}
+            for f in as_iter(features):
+                if isinstance(f, NodeA):
+                    a = f.a
+                    f = f.node
+                else:
+                    try:
+                        a = f.default_a
+                    except AttributeError:
+                        a = 1.0
+                activations_in[f] = max(activations_in.get(f, 0.0), a)
+        #print('DQ', type(activations_in))
+        return self.propagator.propagate(self, activations_in)
+
+    def query(
+        self,
+        features: Iterable[Hashable]=None,
+        activations_in: Dict[Hashable, float]=None,
+        type: Type=None,
+        k: Union[int, None]=None,
+        filter: Union[Callable, None]=None
+    ) -> List[NodeA]:
+        activations_out = self.dquery(
+            features=features, activations_in=activations_in
+        )
+        #print('QUERY')
+        #pr(self.top(activations_out, k=k))
+        #print('SUM', sum(activations_out.values()))
+        return self.top(activations_out, type, k, filter=filter)
+
+    @classmethod
+    def to_d(cls, nas: List[NodeA]) -> Dict[Hashable, float]:
+        return dict((na.node, na.a) for na in nas)
+
+    @classmethod
+    def top(
+        cls,
+        d: Dict[Hashable, float],
+        type: Type=None,
+        k: Union[int, None]=None,
+        filter: Union[Callable, None]=None
+    ) -> List[NodeA]:
+        if filter is None:
+            filter = lambda x: True
+        if type is None:
+            nas = [
+                NodeA(node, a)
+                    for (node, a) in d.items()
+                        if filter(node)
+            ]
+        else:
+            nas = [
+                NodeA(node, a)
+                    for (node, a) in d.items()
+                        if isinstance(node, type) and filter(node)
+            ]
+        if k is None:
+            return sorted(nas, key=attrgetter('a'), reverse=True)
+        else:
+            return nlargest(k, nas, key=attrgetter('a'))
+
+    def qnodes(self, pred) -> Iterable:
+        ''''Query the nodes'. Returns a generator of all the nodes that meet
+        pred.'''
+        # TODO Allow pred to a function, not just a class.
+        return (node for node in self if isinstance(node, pred))
+
+    def pr(self):
+        '''Prints the slipnet.'''
+        p = Indenting(sys.stdout, prefix='  ')
+        for node in sorted(self.nodes, key=str):
+            print(str(node), file=p)
+            with indent(p):
+                for neighbor in sorted(self.neighbors(node), key=str):
+                    print(
+                        f'{self.weight(node, neighbor): .2f}  {neighbor}',
+                        file=p
+                    )
+
+class Leading(FeatureWrapper):
+    '''Indicates the leading digit of something.'''
+    pass
+
+class Trailing(FeatureWrapper):
+    '''Indicates the last digit of something.'''
+    pass
+
+@dataclass(frozen=True)
+class Even:
+    pass
+
+@dataclass(frozen=True)
+class Odd:
+    pass
+
+class IntFeatures(Slipnet):
+
+    def default_features(self, x):
+        #print('INTF')
+        if isinstance(x, int):
+            if x & 1:
+                yield Odd()
+            else:
+                yield Even()
+            s = str(x)
+            if len(s) > 1:
+                yield Leading(int(s[0]))
+                yield Trailing(int(s[1]))
+        else:
+            yield from super().default_features(x)
+
+@dataclass(frozen=True)
+class NumberNode:
+    '''Represents a number as a node in the slipnet.'''
+    value: int
+
+    def __str__(self):
+        return f'Num({self.value})'
+
+    def __hash__(self):
+        return hash(('NumberNode', self.value))
+
+class NumericSlipnet(IntFeatures):
+    '''Slipnet with numeric proximity relationships.'''
+
+    def add_number_nodes(self, lb: int = 1, ub: int = 100):
+        '''Add number nodes and proximity links to the slipnet.
+
+        Args:
+            lb: Lower bound of number range
+            ub: Upper bound of number range
+        '''
+        # Create nodes for each number
+        number_nodes = {}
+        for n in range(lb, ub + 1):
+            node = NumberNode(n)
+            self.add_node(node)
+            number_nodes[n] = node
+
+        # Add proximity links between numbers
+        # Link strength decreases with distance
+        for n in range(lb, ub + 1):
+            node = number_nodes[n]
+            # Link to nearby numbers (within distance 20)
+            for offset in range(1, 21):
+                # Link to n+offset
+                if n + offset <= ub:
+                    neighbor = number_nodes[n + offset]
+                    # Strength decreases with distance
+                    strength = 1.0 / (1.0 + offset)
+                    self.add_edge(node, neighbor, weight=strength)
+
+                # Link to n-offset (only if different from n+offset)
+                if n - offset >= lb and offset > 0:
+                    neighbor = number_nodes[n - offset]
+                    strength = 1.0 / (1.0 + offset)
+                    self.add_edge(node, neighbor, weight=strength)
+
+    def set_target_activation(self, target: int, activation: float = 1.0):
+        '''Set initial activation for target number and spread to nearby numbers.
+
+        Args:
+            target: The target number
+            activation: Initial activation level (default 1.0)
+
+        Returns:
+            Dictionary of activations after spreading
+        '''
+        target_node = NumberNode(target)
+        if target_node not in self.nodes:
+            return {}
+
+        # Initialize with target node activated
+        activations_in = {target_node: activation}
+
+        # Propagate activation through the network
+        activations_out = self.dquery(activations_in=activations_in)
+
+        return activations_out
+
+    def get_number_activation(self, value: int, activations: Dict = None) -> float:
+        '''Get activation level of a number node.
+
+        Args:
+            value: The number to query
+            activations: Optional pre-computed activation dictionary
+
+        Returns:
+            Activation level (0.0 if number not in slipnet)
+        '''
+        node = NumberNode(value)
+        if activations is not None:
+            return activations.get(node, 0.0)
+        elif node in self.nodes:
+            # Query fresh if no activations provided
+            return 0.0  # Default to no activation
+        else:
+            return 0.0
+
+empty_slipnet = Slipnet()
