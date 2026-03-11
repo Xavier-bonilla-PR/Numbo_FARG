@@ -27,6 +27,12 @@ import logging
 import os
 import sys
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not installed; rely on environment variables
+
 
 def parse_args():
     p = argparse.ArgumentParser(description="FARG Travel Path Finder: Hanoi → Da Nang")
