@@ -30,18 +30,27 @@ import logging
 import random
 from typing import List, Optional
 
-from agents import AGENT_TYPES, Evaluate
+from agents import AGENT_TYPES, Evaluate, SeekEvidence
 from canvas import ImCell
 from config import ACT_EARLY_PROB, ACT_LATE_TICK, GOAL, MAX_TICKS, MIN_COMPLETE_PATHS
-from tags import ActIsDone, Blocked, GoIsDone, PathComplete
+from tags import ActIsDone, Blocked, GettingCloser, GoIsDone, PathComplete
 
 log = logging.getLogger(__name__)
 
 
 # ── Detector helpers ──────────────────────────────────────────────────────────
 
+_MIN_FEASIBILITY_SCORE: float = 0.35  # SeekEvidence score required before PathComplete
+
+
 def _detect_complete_paths(ws) -> None:
-    """Tag any ImCell that has reached GOAL as PathComplete and boost it."""
+    """Tag an ImCell at GOAL as PathComplete only after SeekEvidence stamps it feasible.
+
+    If the ImCell has not yet been evaluated, a SeekEvidence agent is spawned
+    and the decision is deferred to the next tick(s).  Paths scoring below
+    _MIN_FEASIBILITY_SCORE are never marked complete, preventing degenerate
+    hallucinated routes (e.g. wrong-direction island hops) from polluting results.
+    """
     for elem in list(ws.elements.keys()):
         if not isinstance(elem, ImCell):
             continue
@@ -49,7 +58,27 @@ def _detect_complete_paths(ws) -> None:
             continue
         if ws.has_tag(elem, PathComplete):
             continue
-        # Build the full location sequence
+
+        # Require a quality evaluation before declaring complete.
+        gc_tags = [t for t in ws.tags_on(elem) if isinstance(t, GettingCloser)]
+        if not gc_tags:
+            # Not yet evaluated — spawn SeekEvidence if none already pending.
+            already = any(
+                isinstance(e, SeekEvidence) and e.imcell == elem
+                for e in ws.elements
+            )
+            if not already:
+                ws.add(SeekEvidence(path_id=elem.path_id, imcell=elem))
+            continue
+
+        best_score = max(t.weight for t in gc_tags)
+        if best_score < _MIN_FEASIBILITY_SCORE:
+            log.debug(
+                "_detect_complete_paths: %s scored %.2f < %.2f — not marking complete",
+                elem.path_id, best_score, _MIN_FEASIBILITY_SCORE,
+            )
+            continue
+
         if elem.legs:
             path_locs = (elem.legs[0].from_loc,) + tuple(l.to_loc for l in elem.legs)
         else:
@@ -57,7 +86,7 @@ def _detect_complete_paths(ws) -> None:
         tag = PathComplete(taggee=elem, path=path_locs)
         ws.tag(tag)
         ws.boost(elem)
-        log.info("Path complete: %s", " → ".join(path_locs))
+        log.info("Path complete (score=%.2f): %s", best_score, " -> ".join(path_locs))
 
 
 def _detect_blocked_agents(ws) -> None:

@@ -124,8 +124,17 @@ class SuggestMode:
             self.path_id, self.current_loc, self.mode, activation,
         )
 
+        # Build visited-location list from committed canvas so the LLM
+        # does not suggest places the traveller has already been.
+        canvas_cells = sorted(ws.canvas_legs(self.path_id), key=lambda c: c.position)
+        if canvas_cells:
+            visited = [canvas_cells[0].leg.from_loc] + [c.leg.to_loc for c in canvas_cells]
+        else:
+            visited = []
+
         leg_data = slipnet.query_route(
-            self.current_loc, self.goal, self.mode, activation
+            self.current_loc, self.goal, self.mode, activation,
+            visited_locs=visited,
         )
 
         ws.untag(self, PendingLLM)
@@ -225,12 +234,53 @@ class SuggestRoute:
             return
 
         # Guard: proposed leg must connect to where we currently are.
+        # FARG fix: if from_loc is in the path history, branch instead of skipping.
         if existing is not None and existing.current_loc != self.proposed_leg.from_loc:
-            log.debug(
-                "SuggestRoute.go: leg mismatch (at %s, leg starts from %s) — skipping",
-                existing.current_loc, self.proposed_leg.from_loc,
-            )
+            seq = existing.location_sequence()
+            if self.proposed_leg.from_loc in seq:
+                cut = seq.index(self.proposed_leg.from_loc)
+                branch_legs = existing.legs[:cut]
+                new_pid = ws.new_path_id()
+                branch_visited = set(seq[:cut + 1])
+                # Only branch if the proposed destination is novel (no revisit)
+                if (self.proposed_leg.to_loc not in branch_visited
+                        or self.proposed_leg.to_loc == self.goal):
+                    new_imcell = ImCell(
+                        path_id=new_pid,
+                        legs=branch_legs + (self.proposed_leg,),
+                        current_loc=self.proposed_leg.to_loc,
+                    )
+                    # Commit historical legs + proposed leg to canvas for new_pid
+                    # so future reconstruction from canvas works correctly.
+                    for bl in branch_legs:
+                        ws.commit_leg(new_pid, bl)
+                    ws.commit_leg(new_pid, self.proposed_leg)
+                    ws.add(new_imcell, builder=self)
+                    ws.add(SeekEvidence(path_id=new_pid, imcell=new_imcell), builder=self)
+                    if self.proposed_leg.to_loc != self.goal:
+                        ws.add(
+                            SuggestMode(
+                                path_id=new_pid,
+                                current_loc=self.proposed_leg.to_loc,
+                                goal=self.goal,
+                                mode=self.mode,
+                            ),
+                            builder=self,
+                            init_a=0.5,
+                        )
+                    log.debug(
+                        "SuggestRoute.go: branched %s -> %s at %s -> %s",
+                        self.path_id, new_pid,
+                        self.proposed_leg.from_loc, self.proposed_leg.to_loc,
+                    )
+            else:
+                log.debug(
+                    "SuggestRoute.go: leg mismatch (at %s, leg starts from %s) — skipping",
+                    existing.current_loc, self.proposed_leg.from_loc,
+                )
+            # Either branched or irreconcilable — never commit wrong leg to wrong path.
             ws.tag(GoIsDone(taggee=self))
+            ws.tag(ActIsDone(taggee=self))
             return
 
         # Guard: prevent revisiting a location already in the path.

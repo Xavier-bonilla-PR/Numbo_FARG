@@ -130,11 +130,23 @@ class RealSlipnet:
         to_loc: str,
         mode: str,
         activation: float = 0.5,
+        visited_locs: Optional[List[str]] = None,
     ) -> Optional[Dict[str, Any]]:
         temp = temperature_for_activation(activation)
+        # Inject path memory so the LLM avoids backtracking.
+        if visited_locs and len(visited_locs) > 1:
+            history = " -> ".join(visited_locs)
+            no_revisit = ", ".join(visited_locs[1:])
+            history_clause = (
+                f"The traveler started in {visited_locs[0]} and has already visited: "
+                f"{history}. Do NOT suggest any of these places: {no_revisit}. "
+            )
+        else:
+            history_clause = ""
         prompt = (
             f"You are a Vietnam travel expert. "
             f"Return JSON ONLY (no markdown). "
+            f"{history_clause}"
             f"Suggest ONE travel leg from {from_loc} toward {to_loc} in Vietnam "
             f"using {mode} transport. "
             f"You may suggest an interesting intermediate stop (scenic, cultural, "
@@ -319,6 +331,7 @@ class MockSlipnet:
         to_loc: str,
         mode: str,
         activation: float = 0.5,
+        visited_locs: Optional[List[str]] = None,
     ) -> Optional[Dict[str, Any]]:
         key = (from_loc, to_loc, mode)
         return self._ROUTES.get(key)
