@@ -23,7 +23,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -50,15 +49,20 @@ def temperature_for_activation(activation: float) -> float:
 
 # ── Async LLM call ────────────────────────────────────────────────────────────
 
-_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+import time as _time
 
 
 async def _async_query(prompt: str, temperature: float) -> Dict[str, Any]:
-    """Send a single chat-completion request; return parsed JSON dict."""
-    # /no_think suppresses Qwen3 chain-of-thought tokens
-    full_prompt = prompt + " /no_think"
+    """Send a single chat-completion request; return parsed JSON dict.
+
+    reasoning=enabled keeps Qwen3 thinking active but isolates it in
+    reasoning_details so the message content is clean JSON.
+    """
+    t0 = _time.monotonic()
+    log.debug("LLM request start  model=%s temp=%.3f prompt_len=%d",
+              MODEL_ID, temperature, len(prompt))
     async with _semaphore:
-        async with httpx.AsyncClient(timeout=45.0) as client:
+        async with httpx.AsyncClient(timeout=90.0) as client:
             resp = await client.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={
@@ -69,14 +73,16 @@ async def _async_query(prompt: str, temperature: float) -> Dict[str, Any]:
                 },
                 json={
                     "model": MODEL_ID,
-                    "messages": [{"role": "user", "content": full_prompt}],
+                    "messages": [{"role": "user", "content": prompt}],
                     "temperature": temperature,
+                    "reasoning": {"enabled": True},
                 },
             )
+    elapsed = _time.monotonic() - t0
+    log.debug("LLM response  status=%d elapsed=%.1fs", resp.status_code, elapsed)
     resp.raise_for_status()
     raw = resp.json()["choices"][0]["message"]["content"]
-    # Strip any residual <think>…</think> blocks before parsing
-    raw = _THINK_RE.sub("", raw).strip()
+    log.debug("LLM raw content: %.200s", raw)
     return json.loads(raw)
 
 
