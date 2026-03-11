@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -49,8 +50,13 @@ def temperature_for_activation(activation: float) -> float:
 
 # ── Async LLM call ────────────────────────────────────────────────────────────
 
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+
 async def _async_query(prompt: str, temperature: float) -> Dict[str, Any]:
     """Send a single chat-completion request; return parsed JSON dict."""
+    # /no_think suppresses Qwen3 chain-of-thought tokens
+    full_prompt = prompt + " /no_think"
     async with _semaphore:
         async with httpx.AsyncClient(timeout=45.0) as client:
             resp = await client.post(
@@ -63,13 +69,14 @@ async def _async_query(prompt: str, temperature: float) -> Dict[str, Any]:
                 },
                 json={
                     "model": MODEL_ID,
-                    "messages": [{"role": "user", "content": prompt}],
+                    "messages": [{"role": "user", "content": full_prompt}],
                     "temperature": temperature,
-                    "response_format": {"type": "json_object"},
                 },
             )
     resp.raise_for_status()
     raw = resp.json()["choices"][0]["message"]["content"]
+    # Strip any residual <think>…</think> blocks before parsing
+    raw = _THINK_RE.sub("", raw).strip()
     return json.loads(raw)
 
 
