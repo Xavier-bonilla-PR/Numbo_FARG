@@ -8,7 +8,7 @@ import os
 
 # ── LLM / Slipnet ─────────────────────────────────────────────────────────────
 OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
-MODEL_ID: str = "qwen/qwen3-14b"
+MODEL_ID: str = "qwen/qwen3.5-9b"
 MAX_CONCURRENT_LLM: int = 2          # semaphore cap on async LLM calls
 
 # ── Activation dynamics ────────────────────────────────────────────────────────
