@@ -75,7 +75,6 @@ async def _async_query(prompt: str, temperature: float) -> Dict[str, Any]:
                     "model": MODEL_ID,
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": temperature,
-                    "reasoning": {"enabled": True},
                 },
             )
     elapsed = _time.monotonic() - t0
