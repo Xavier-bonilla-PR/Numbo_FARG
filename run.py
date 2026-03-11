@@ -27,7 +27,7 @@ import logging
 import os
 import sys
 
-# Force UTF-8 output on Windows (avoids cp1252 UnicodeEncodeError for →, ▶, ⚙, 🏷)
+# Force UTF-8 output on Windows (belt-and-suspenders alongside ASCII-only stdout symbols)
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 if hasattr(sys.stderr, "reconfigure"):
@@ -41,7 +41,7 @@ except ImportError:
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="FARG Travel Path Finder: Hanoi → Da Nang")
+    p = argparse.ArgumentParser(description="FARG Travel Path Finder: Hanoi -> Da Nang")
     p.add_argument("--ticks",   type=int,  default=None, help="Max heartbeat ticks")
     p.add_argument("--quiet",   action="store_true",     help="Suppress tick log")
     p.add_argument("--verbose", action="store_true",     help="Enable DEBUG logging")
@@ -81,7 +81,7 @@ def main() -> None:
     verbose = not args.quiet
 
     print(f"\nFARG Travel Path Finder")
-    print(f"  Route  : {START} → {GOAL}")
+    print(f"  Route  : {START} -> {GOAL}")
     print(f"  Slipnet: {slipnet_name}")
     print(f"  MaxTick: {max_ticks}")
     print()

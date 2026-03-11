@@ -33,12 +33,12 @@ class TickLogger:
             return
 
         out = self.stream
-        out.write(f"\n── Tick {tick:03d} {'─'*44}\n")
+        out.write(f"\n-- Tick {tick:03d} {'-'*44}\n")
 
         if chosen is not None:
             a = ws.activation(chosen)
             label = _short(chosen)
-            out.write(f"  ▶ {label}  (a={a:.3f})\n")
+            out.write(f"  > {label}  (a={a:.3f})\n")
 
         # Top elements
         top = ws.top_elements(n=6)
@@ -55,7 +55,7 @@ class TickLogger:
             for cell in ws.canvas:
                 by_path.setdefault(cell.path_id, []).append(cell)
             for pid, cells in sorted(by_path.items()):
-                locs = " → ".join(
+                locs = " ->".join(
                     ([cells[0].leg.from_loc] + [c.leg.to_loc for c in cells])
                 )
                 out.write(f"    [{pid}] {locs}\n")
@@ -65,8 +65,8 @@ class TickLogger:
             new_paths = [p for p in complete if id(p) not in self._seen_paths]
             for p in new_paths:
                 self._seen_paths.add(id(p))
-                route = " → ".join(p.path)
-                out.write(f"  ✓ PATH FOUND [{p.taggee.path_id}]: {route}\n")
+                route = " ->".join(p.path)
+                out.write(f"  * PATH FOUND [{p.taggee.path_id}]: {route}\n")
 
         out.flush()
 
@@ -77,7 +77,7 @@ class TickLogger:
         out.write(f"  FARG discovered {len(paths)} competing paths\n")
         out.write(f"{sep}\n")
         for i, p in enumerate(paths, 1):
-            route = " → ".join(p.path)
+            route = " ->".join(p.path)
             modes = _path_modes(p)
             out.write(f"  Path {i}: {route}\n")
             if modes:
@@ -97,21 +97,21 @@ def _short(elem: Any) -> str:
     )
 
     if isinstance(elem, Want):
-        return f"Want({elem.from_loc}→{elem.to_loc})"
+        return f"Want({elem.from_loc}->{elem.to_loc})"
     if isinstance(elem, SuggestMode):
         return f"SuggestMode[{elem.path_id}] {elem.current_loc}/{elem.mode}"
     if isinstance(elem, SuggestRoute):
         return (
             f"SuggestRoute[{elem.path_id}] "
-            f"{elem.proposed_leg.from_loc}→{elem.proposed_leg.to_loc}"
+            f"{elem.proposed_leg.from_loc}->{elem.proposed_leg.to_loc}"
             f"({elem.proposed_leg.mode})"
         )
     if isinstance(elem, SeekEvidence):
         return f"SeekEvidence[{elem.path_id}]"
     if isinstance(elem, Evaluate):
-        return f"Evaluate[{elem.path_id_a}↔{elem.path_id_b}]"
+        return f"Evaluate[{elem.path_id_a}<->{elem.path_id_b}]"
     if isinstance(elem, ImCell):
-        locs = " → ".join(elem.location_sequence())
+        locs = " ->".join(elem.location_sequence())
         return f"ImCell[{elem.path_id}]: {locs}"
     if isinstance(elem, GettingCloser):
         return f"GettingCloser(w={elem.weight:.2f})"
@@ -127,11 +127,11 @@ def _type_mark(elem: Any) -> str:
     from agents import AGENT_TYPES
     from tags import Tag
     if isinstance(elem, ImCell):
-        return "🗺"
+        return "[M]"
     if isinstance(elem, AGENT_TYPES):
-        return "⚙"
+        return "[A]"
     if isinstance(elem, Tag):
-        return "🏷"
+        return "[T]"
     return " "
 
 
