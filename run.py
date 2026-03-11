@@ -27,6 +27,12 @@ import logging
 import os
 import sys
 
+# Force UTF-8 output on Windows (avoids cp1252 UnicodeEncodeError for →, ▶, ⚙, 🏷)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 try:
     from dotenv import load_dotenv
     load_dotenv()
