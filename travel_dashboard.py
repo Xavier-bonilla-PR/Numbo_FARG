@@ -73,18 +73,32 @@ STACKED_TYPES = [
 
 # ── Simulation runner ─────────────────────────────────────────────────────────
 
-def run_simulation(use_mock: bool, max_ticks: int) -> tuple[MetricsCollector, list]:
+def run_simulation(use_mock: bool, max_ticks: int):
     from agents import Want
     from main_loop import run_loop
-    from slipnet import MockSlipnet, RealSlipnet
+    from slipnet import MockSlipnet, RealSlipnet, CountingSlipnet
+    from tags import GoalReached
     from workspace import Workspace
 
-    slipnet = MockSlipnet() if use_mock else RealSlipnet()
+    inner = MockSlipnet() if use_mock else RealSlipnet()
+    counting = CountingSlipnet(inner)
     ws = Workspace()
     ws.add(Want(from_loc=START, to_loc=GOAL), init_a=1.0)
     mc = MetricsCollector()
-    paths = run_loop(ws, slipnet, logger=mc, max_ticks=max_ticks)
-    return mc, paths
+    paths = run_loop(ws, counting, logger=mc, max_ticks=max_ticks)
+
+    # Snapshot architecture-only call counts BEFORE post-run scoring.
+    arch_calls = dict(counting.calls)
+
+    # Score each completed FARG path with the same evaluate_path(activation=0.5)
+    # call that baseline uses, so scores are directly comparable.
+    farg_scores: dict = {}
+    for pc in paths:
+        pid  = pc.path_id if isinstance(pc, GoalReached) else pc.taggee.path_id
+        legs = pc.legs    if isinstance(pc, GoalReached) else pc.taggee.legs
+        farg_scores[pid] = counting.evaluate_path(f"farg-{pid}", legs, activation=0.5)
+
+    return mc, paths, arch_calls, farg_scores
 
 
 # ── Chart builders ────────────────────────────────────────────────────────────
@@ -431,93 +445,289 @@ def panel_path_comparison(paths: list) -> None:
             st.code(route_str, language=None)
 
 
-def chart_farg_vs_baseline(farg_paths: list, base_run) -> go.Figure:
-    """Grouped bar chart: quality score per path, FARG vs Baseline."""
+def _path_diversity(legs_list) -> tuple[int, int]:
+    """Return (unique_modes, unique_intermediate_cities) across a list of leg sequences."""
+    modes: set = set()
+    cities: set = set()
+    for legs in legs_list:
+        for i, leg in enumerate(legs):
+            modes.add(leg.mode)
+            # Intermediate = not the final destination
+            if i < len(legs) - 1:
+                cities.add(leg.to_loc)
+    return len(modes), len(cities)
+
+
+def chart_score_vs_hours(farg_paths: list, farg_scores: dict, base_run) -> go.Figure:
+    """Scatter plot: quality score (Y) vs total hours (X), one point per path.
+
+    FARG: blue circles.  Baseline: orange diamonds.
+    Each trace annotated with n= count.
+    """
     from tags import GoalReached
-    from slipnet import MockSlipnet
 
-    bars: dict = {"label": [], "score": [], "hours": [], "system": [], "colour": []}
+    fig = go.Figure()
 
+    # ── FARG trace ────────────────────────────────────────────────────────────
+    f_x, f_y, f_text = [], [], []
     for pc in farg_paths:
         if isinstance(pc, GoalReached):
             pid, legs = pc.path_id, pc.legs
         else:
             pid, legs = pc.taggee.path_id, pc.taggee.legs
+        hours = sum(l.duration_hours for l in legs)
+        score = farg_scores.get(pid)
+        if score is None:
+            continue
         route = " -> ".join(pc.path)
-        bars["label"].append(f"FARG {pid}")
-        bars["score"].append(None)   # FARG doesn't store a single score; use hours proxy
-        bars["hours"].append(sum(l.duration_hours for l in legs))
-        bars["system"].append("FARG")
-        bars["colour"].append("#1f77b4")
+        f_x.append(hours)
+        f_y.append(score)
+        f_text.append(
+            f"<b>FARG</b> {pid}<br>"
+            f"Score: {score:.2f}<br>"
+            f"Hours: {hours:.1f}<br>"
+            f"Legs: {len(legs)}<br>"
+            f"Route: {route}"
+        )
 
-    for r in base_run.paths:
-        bars["label"].append(f"Baseline [{r.mode}]")
-        bars["score"].append(r.score)
-        bars["hours"].append(r.total_hours())
-        bars["system"].append("Baseline")
-        bars["colour"].append("#ff7f0e")
-
-    fig = go.Figure()
-
-    # Hours bars (left y-axis)
-    fig.add_trace(go.Bar(
-        name="Total hours",
-        x=bars["label"],
-        y=bars["hours"],
-        marker_color=bars["colour"],
-        opacity=0.75,
-        yaxis="y",
-        text=[f"{h:.1f}h" for h in bars["hours"]],
-        textposition="outside",
-    ))
-
-    # Score overlay for baseline (right y-axis)
-    baseline_x = [l for l, s in zip(bars["label"], bars["score"]) if s is not None]
-    baseline_s = [s for s in bars["score"] if s is not None]
-    if baseline_s:
+    n_farg = len(f_x)
+    if f_x:
         fig.add_trace(go.Scatter(
-            name="Quality score (baseline)",
-            x=baseline_x,
-            y=baseline_s,
-            mode="markers",
-            marker=dict(symbol="diamond", size=12, color="#d62728"),
-            yaxis="y2",
+            x=f_x, y=f_y,
+            mode="markers+text",
+            name=f"FARG (n={n_farg})",
+            marker=dict(symbol="circle", size=14, color="#1f77b4",
+                        line=dict(width=1.5, color="white")),
+            text=[f"F{i+1}" for i in range(n_farg)],
+            textposition="top center",
+            textfont=dict(size=9, color="#1f77b4"),
+            hovertext=f_text,
+            hoverinfo="text",
+        ))
+
+    # ── Baseline trace ────────────────────────────────────────────────────────
+    b_x, b_y, b_text = [], [], []
+    for r in base_run.paths:
+        hours = r.total_hours()
+        route = " -> ".join(r.path)
+        b_x.append(hours)
+        b_y.append(r.score)
+        b_text.append(
+            f"<b>Baseline</b> [{r.mode}]<br>"
+            f"Score: {r.score:.2f}<br>"
+            f"Hours: {hours:.1f}<br>"
+            f"Legs: {len(r.legs)}<br>"
+            f"Route: {route}"
+        )
+
+    n_base = len(b_x)
+    if b_x:
+        fig.add_trace(go.Scatter(
+            x=b_x, y=b_y,
+            mode="markers+text",
+            name=f"Baseline (n={n_base})",
+            marker=dict(symbol="diamond", size=14, color="#ff7f0e",
+                        line=dict(width=1.5, color="white")),
+            text=[f"B{i+1}" for i in range(n_base)],
+            textposition="top center",
+            textfont=dict(size=9, color="#ff7f0e"),
+            hovertext=b_text,
+            hoverinfo="text",
         ))
 
     fig.update_layout(
-        title="FARG vs Baseline — Travel Hours & Quality Score",
-        xaxis_title="Path",
-        yaxis=dict(title="Total hours", side="left"),
-        yaxis2=dict(title="Quality score [0–1]", side="right", overlaying="y",
-                    range=[0, 1.1]),
-        legend=dict(orientation="h"),
-        barmode="group",
-        height=400,
+        title=(
+            "Score vs Travel Hours — same LLM, same 4 prompts<br>"
+            "<sup>Both systems scored by evaluate_path(activation=0.5) for parity</sup>"
+        ),
+        xaxis_title="Total travel hours",
+        yaxis_title="Quality score [0–1]",
+        yaxis=dict(range=[0, 1.1]),
+        legend=dict(orientation="h", y=1.12),
+        height=420,
     )
     return fig
 
 
-def panel_farg_vs_baseline(farg_paths: list, base_run) -> None:
+def chart_call_breakdown(farg_explore_calls: dict, farg_score_calls: dict,
+                         base_run) -> go.Figure:
+    """Horizontal stacked bar: LLM calls by type and purpose for each system.
+
+    Segments: query_modes (yellow), query_route (blue),
+              evaluate_path (green), compare_paths (purple).
+    Two sub-bars per system label: 'Exploration calls' vs 'Scoring calls'.
+    """
+    CALL_COLORS = {
+        "query_modes":    "#f9c74f",
+        "query_route":    "#4895ef",
+        "evaluate_path":  "#4cc9f0",
+        "compare_paths":  "#7b2d8b",
+    }
+    CALL_TYPES = ["query_modes", "query_route", "evaluate_path", "compare_paths"]
+
+    base_calls = getattr(base_run, "calls_by_type", {})
+
+    # y-axis labels — two bars per system
+    y_labels = [
+        "FARG — Exploration calls",
+        "FARG — Scoring calls",
+        "Baseline — All calls",
+    ]
+
+    # Data rows: [farg_explore, farg_score, baseline]
+    data_rows = [farg_explore_calls, farg_score_calls, base_calls]
+    totals = [sum(r.values()) for r in data_rows]
+    n_farg = len([p for p in st.session_state.get("paths", [])]) or 1
+    n_base = len(base_run.paths) or 1
+
+    fig = go.Figure()
+    for ctype in CALL_TYPES:
+        vals = [row.get(ctype, 0) for row in data_rows]
+        fig.add_trace(go.Bar(
+            name=ctype,
+            y=y_labels,
+            x=vals,
+            orientation="h",
+            marker_color=CALL_COLORS[ctype],
+            hovertemplate=f"{ctype}: %{{x}}<extra></extra>",
+        ))
+
+    # Annotations: calls/path at end of each bar
+    calls_per_path = [
+        totals[0] / n_farg,
+        totals[1] / n_farg,
+        totals[2] / n_base,
+    ]
+    annotations = []
+    for i, (label, total, cpp) in enumerate(zip(y_labels, totals, calls_per_path)):
+        annotations.append(dict(
+            x=total + 0.5,
+            y=label,
+            text=f"  {total} total ({cpp:.1f}/path)",
+            showarrow=False,
+            xanchor="left",
+            font=dict(size=11),
+        ))
+
+    fig.update_layout(
+        title="LLM Call Breakdown — Exploration vs Scoring",
+        xaxis_title="Number of LLM calls",
+        barmode="stack",
+        legend=dict(orientation="h", y=1.12),
+        annotations=annotations,
+        height=300,
+    )
+    return fig
+
+
+def panel_farg_vs_baseline(farg_paths: list, farg_scores: dict,
+                            farg_explore_calls: dict, base_run) -> None:
     """Full FARG vs Baseline comparison section."""
     from tags import GoalReached
 
     st.subheader("FARG vs Baseline — Head-to-Head")
     st.caption(
-        "Left: paths found by the FARG cognitive architecture (activation, "
-        "competition, chain coherence).  Right: same LLM, same prompts, "
-        "fixed sequential pipeline — no dynamics."
+        "Same LLM, same 4 prompts — FARG uses activation dynamics to prune "
+        "unpromising branches early. Baseline exhaustively explores every mode.  \n"
+        "**Scoring parity**: both systems scored with `evaluate_path(activation=0.5)` "
+        "after the run, so scores are directly comparable."
     )
 
-    # ── KPI row ───────────────────────────────────────────────────────────────
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("FARG paths", len(farg_paths))
-    k2.metric("Baseline paths", len(base_run.paths))
-    k3.metric("Baseline LLM calls", base_run.llm_calls)
-    k4.metric("Baseline modes tried", f"{base_run.modes_complete}/{base_run.modes_tried}")
+    # ── Derive secondary data ─────────────────────────────────────────────────
+    farg_scored_paths = []
+    for pc in farg_paths:
+        if isinstance(pc, GoalReached):
+            pid, legs = pc.path_id, pc.legs
+        else:
+            pid, legs = pc.taggee.path_id, pc.taggee.legs
+        if pid in farg_scores:
+            farg_scored_paths.append((pid, legs))
 
-    st.plotly_chart(chart_farg_vs_baseline(farg_paths, base_run), use_container_width=True)
+    farg_scores_list = [farg_scores[pid] for pid, _ in farg_scored_paths]
+    base_scores_list  = [r.score for r in base_run.paths]
+    farg_avg  = sum(farg_scores_list) / max(1, len(farg_scores_list))
+    base_avg  = sum(base_scores_list) / max(1, len(base_scores_list))
+
+    farg_explore_total = sum(farg_explore_calls.values())
+    # Scoring calls = total counting.calls minus exploration calls
+    farg_score_total = sum(farg_scores_extra.get(k, 0)
+                           for k in farg_explore_calls
+                           for farg_scores_extra in [{}])   # computed below
+    # Build scoring call dict: evaluate_path calls made AFTER arch snapshot
+    # = (current counting total) - (arch snapshot total).
+    # We receive farg_explore_calls (arch snapshot) and must infer score calls.
+    # evaluate_path is the only post-run call type; query_modes/route/compare stay 0.
+    farg_score_calls: dict = {k: 0 for k in farg_explore_calls}
+    n_farg_paths = len(farg_scored_paths)
+    farg_score_calls["evaluate_path"] = n_farg_paths
+
+    farg_score_total = n_farg_paths
+    base_total = sum(getattr(base_run, "calls_by_type", {}).values()) or base_run.llm_calls
+    n_farg_total_calls = farg_explore_total + farg_score_total
+
+    n_farg = len(farg_paths) or 1
+    n_base = len(base_run.paths) or 1
+
+    farg_legs_list   = [legs for _, legs in farg_scored_paths]
+    base_legs_list   = [r.legs for r in base_run.paths]
+    farg_umodes, farg_ucities = _path_diversity(farg_legs_list)
+    base_umodes, base_ucities = _path_diversity(base_legs_list)
+
+    # ── 8-tile KPI grid ───────────────────────────────────────────────────────
+    r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+    r1c1.metric(
+        "FARG exploration calls",
+        farg_explore_total,
+        help="LLM calls made during the FARG run (query_modes + query_route + evaluate + compare). "
+             "Does NOT include post-run scoring.",
+    )
+    r1c2.metric(
+        "Baseline total calls",
+        base_total,
+        help="All LLM calls in the fixed sequential pipeline.",
+    )
+    r1c3.metric("FARG avg score", f"{farg_avg:.2f}",
+                help="evaluate_path(activation=0.5) — same formula as baseline.")
+    r1c4.metric("Baseline avg score", f"{base_avg:.2f}")
+
+    r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+    r2c1.metric("FARG paths found", len(farg_paths))
+    r2c2.metric(
+        "Baseline paths found",
+        f"{base_run.modes_complete}/{base_run.modes_tried} modes",
+    )
+    r2c3.metric(
+        "FARG exploration calls/path",
+        f"{farg_explore_total / n_farg:.1f}",
+        help="Exploration calls divided by number of paths found — architectural efficiency.",
+    )
+    r2c4.metric(
+        "Baseline calls/path",
+        f"{base_total / n_base:.1f}",
+    )
+
+    # ── Diversity metrics ─────────────────────────────────────────────────────
+    st.markdown("**Path Diversity**")
+    d1, d2, d3, d4 = st.columns(4)
+    d1.metric("FARG unique modes", farg_umodes,
+              help="Transport modes appearing in at least one FARG path.")
+    d2.metric("Baseline unique modes", base_umodes)
+    d3.metric("FARG unique intermediate cities", farg_ucities,
+              help="Distinct non-goal waypoints across all FARG paths.")
+    d4.metric("Baseline unique intermediate cities", base_ucities)
+
+    # ── Charts ────────────────────────────────────────────────────────────────
+    st.plotly_chart(
+        chart_score_vs_hours(farg_paths, farg_scores, base_run),
+        use_container_width=True,
+    )
+    st.plotly_chart(
+        chart_call_breakdown(farg_explore_calls, farg_score_calls, base_run),
+        use_container_width=True,
+    )
 
     # ── Side-by-side path cards ────────────────────────────────────────────────
+    st.divider()
     col_farg, col_base = st.columns(2)
 
     with col_farg:
@@ -529,8 +739,12 @@ def panel_farg_vs_baseline(farg_paths: list, base_run) -> None:
                 pid, legs, path = pc.path_id, pc.legs, pc.path
             else:
                 pid, legs, path = pc.taggee.path_id, pc.taggee.legs, pc.path
+            score = farg_scores.get(pid)
+            score_str = f"  score: **{score:.2f}**" if score is not None else ""
             with st.container(border=True):
-                st.markdown(f"**{pid}** — {sum(l.duration_hours for l in legs):.1f} h")
+                st.markdown(
+                    f"**{pid}** — {sum(l.duration_hours for l in legs):.1f} h{score_str}"
+                )
                 for leg in legs:
                     badge = " :green[GOAL]" if leg.to_loc == GOAL else ""
                     st.markdown(
@@ -595,17 +809,22 @@ def main() -> None:
 
     if run_btn:
         with st.spinner("Running FARG simulation..."):
-            mc, paths = run_simulation(use_mock=_use_mock, max_ticks=max_ticks)
+            mc, paths, arch_calls, farg_scores = run_simulation(use_mock=_use_mock, max_ticks=max_ticks)
         st.session_state["mc"] = mc
         st.session_state["paths"] = paths
+        st.session_state["farg_calls"] = arch_calls
+        st.session_state["farg_scores"] = farg_scores
         st.success(f"Done — {len(paths)} path(s) found in {len(mc.snapshots)} ticks.")
 
     if base_btn:
         from baseline import run_baseline
-        from slipnet import MockSlipnet, RealSlipnet
+        from slipnet import MockSlipnet, RealSlipnet, CountingSlipnet
         with st.spinner("Running baseline pipeline..."):
-            sl = MockSlipnet() if _use_mock else RealSlipnet()
-            base_run = run_baseline(sl, START, GOAL)
+            inner = MockSlipnet() if _use_mock else RealSlipnet()
+            base_counting = CountingSlipnet(inner)   # caller owns the wrapper
+            base_run = run_baseline(base_counting, START, GOAL)
+            base_run.calls_by_type = dict(base_counting.calls)
+            base_run.llm_calls = base_counting.total
         st.session_state["base_run"] = base_run
         st.success(
             f"Baseline done — {base_run.modes_complete}/{base_run.modes_tried} modes "
@@ -669,7 +888,10 @@ def main() -> None:
     panel_path_comparison(paths)
 
     # ── Row 6: FARG vs Baseline comparison ────────────────────────────────────
-    base_run = st.session_state.get("base_run")
+    base_run    = st.session_state.get("base_run")
+    farg_calls  = st.session_state.get("farg_calls", {})
+    farg_scores = st.session_state.get("farg_scores", {})
+
     if base_run is not None or paths:
         st.divider()
         if base_run is None:
@@ -677,7 +899,7 @@ def main() -> None:
         elif not paths:
             st.info("Click **Run FARG Simulation** to add FARG paths to the comparison.")
         else:
-            panel_farg_vs_baseline(paths, base_run)
+            panel_farg_vs_baseline(paths, farg_scores, farg_calls, base_run)
 
     # ── Raw data expander ─────────────────────────────────────────────────────
     with st.expander("Raw snapshot data (DataFrame)"):

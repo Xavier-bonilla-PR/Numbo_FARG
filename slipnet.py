@@ -382,3 +382,62 @@ class MockSlipnet:
         score_a = len({l.to_loc for l in imcell_a.legs} & self._INTERESTING)
         score_b = len({l.to_loc for l in imcell_b.legs} & self._INTERESTING)
         return "a" if score_a >= score_b else "b"
+
+
+# ── Counting wrapper ──────────────────────────────────────────────────────────
+
+class CountingSlipnet:
+    """Transparent wrapper that counts LLM calls per method type.
+
+    Wraps any slipnet (MockSlipnet or RealSlipnet) and delegates every call
+    through to the inner object while incrementing a per-type counter.
+    Both run_simulation() and run_baseline() use this wrapper so their call
+    accounting is identical and directly comparable.
+    """
+
+    CALL_TYPES = ("query_modes", "query_route", "evaluate_path", "compare_paths")
+
+    def __init__(self, inner) -> None:
+        self._inner = inner
+        self.calls: Dict[str, int] = {k: 0 for k in self.CALL_TYPES}
+
+    @property
+    def total(self) -> int:
+        return sum(self.calls.values())
+
+    def query_modes(self, from_loc: str, to_loc: str) -> List[str]:
+        self.calls["query_modes"] += 1
+        return self._inner.query_modes(from_loc, to_loc)
+
+    def query_route(
+        self,
+        from_loc: str,
+        to_loc: str,
+        mode: str,
+        activation: float = 0.5,
+        visited_locs: Optional[List[str]] = None,
+        depth: int = 0,
+    ) -> Optional[Dict[str, Any]]:
+        self.calls["query_route"] += 1
+        return self._inner.query_route(
+            from_loc, to_loc, mode,
+            activation=activation, visited_locs=visited_locs, depth=depth,
+        )
+
+    def evaluate_path(
+        self,
+        path_id: str,
+        legs: Any,
+        activation: float = 0.5,
+    ) -> float:
+        self.calls["evaluate_path"] += 1
+        return self._inner.evaluate_path(path_id, legs, activation=activation)
+
+    def compare_paths(
+        self,
+        imcell_a: Any,
+        imcell_b: Any,
+        activation: float = 0.5,
+    ) -> str:
+        self.calls["compare_paths"] += 1
+        return self._inner.compare_paths(imcell_a, imcell_b, activation=activation)

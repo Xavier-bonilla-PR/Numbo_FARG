@@ -15,15 +15,16 @@ Pipeline per mode
 4. compare_paths(a, b, ...)
        → bubble-sort all complete paths by head-to-head comparison
 
-BaselineResult bundles one complete path with its score and call counts.
-BaselineRun holds all paths plus aggregate call counts for the full run.
+IMPORTANT: run_baseline() does NOT wrap slipnet internally.  The caller is
+responsible for passing a CountingSlipnet if call counting is desired.  This
+mirrors how travel_dashboard.run_simulation() works and avoids a double-wrap.
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from canvas import Leg
 
@@ -48,9 +49,10 @@ class BaselineResult:
 class BaselineRun:
     """All results from one baseline run, plus aggregate statistics."""
     paths: List[BaselineResult] = field(default_factory=list)
-    llm_calls: int = 0          # total slipnet calls made
-    modes_tried: int = 0        # how many modes were attempted
-    modes_complete: int = 0     # how many modes reached the goal
+    llm_calls: int = 0                          # total calls (backward compat)
+    modes_tried: int = 0                        # how many modes were attempted
+    modes_complete: int = 0                     # how many modes reached goal
+    calls_by_type: Dict[str, int] = field(default_factory=dict)  # per-type counts
 
 
 # ── Mock imcell shim (compare_paths expects .legs and .current_loc) ───────────
@@ -71,14 +73,14 @@ def run_baseline(
 ) -> BaselineRun:
     """Run the fixed sequential pipeline and return a BaselineRun.
 
-    Uses the same slipnet instance as the FARG run (MockSlipnet or
-    RealSlipnet) so results are directly comparable.
+    Pass a CountingSlipnet from the caller for transparent call accounting.
+    The caller should set base_run.calls_by_type and base_run.llm_calls
+    from the CountingSlipnet after this function returns.
     """
     run = BaselineRun()
 
     # ── Step 1: get modes ─────────────────────────────────────────────────────
     modes = slipnet.query_modes(start, goal)
-    run.llm_calls += 1
     run.modes_tried = len(modes)
     log.info("Baseline: %d modes: %s", len(modes), modes)
 
@@ -95,7 +97,6 @@ def run_baseline(
                 visited_locs=visited,
                 depth=step,
             )
-            run.llm_calls += 1
 
             if leg_data is None:
                 log.debug("Baseline [%s]: no route returned at step %d", mode, step)
@@ -132,7 +133,6 @@ def run_baseline(
         score = slipnet.evaluate_path(
             f"baseline-{mode}", tuple(legs), activation=0.5
         )
-        run.llm_calls += 1
 
         path_locs = (start,) + tuple(l.to_loc for l in legs)
         result = BaselineResult(
@@ -155,12 +155,11 @@ def run_baseline(
             for j in range(n - 1):
                 a, b = run.paths[j], run.paths[j + 1]
                 winner = slipnet.compare_paths(_Cell(a), _Cell(b), activation=0.5)
-                run.llm_calls += 1
                 if winner == "b":
                     run.paths[j], run.paths[j + 1] = b, a
 
     log.info(
-        "Baseline done: %d/%d modes complete, %d LLM calls",
-        run.modes_complete, run.modes_tried, run.llm_calls,
+        "Baseline done: %d/%d modes complete",
+        run.modes_complete, run.modes_tried,
     )
     return run
