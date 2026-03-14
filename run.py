@@ -65,7 +65,7 @@ def main() -> None:
     from config import GOAL, MAX_TICKS, START
     from logger import TickLogger
     from main_loop import run_loop
-    from slipnet import MockSlipnet, RealSlipnet
+    from travel_slipnet import MockSlipnet, RealSlipnet
     from workspace import Workspace
 
     # ── Select slipnet ────────────────────────────────────────────────────────

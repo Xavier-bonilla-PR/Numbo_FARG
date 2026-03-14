@@ -310,7 +310,7 @@ def main() -> None:
         format="%(levelname)s %(name)s: %(message)s",
     )
 
-    from slipnet import MockSlipnet, RealSlipnet
+    from travel_slipnet import MockSlipnet, RealSlipnet
     use_real = args.real and bool(os.getenv("OPENROUTER_API_KEY"))
     slipnet = RealSlipnet() if use_real else MockSlipnet()
     kind = "RealSlipnet" if use_real else "MockSlipnet"

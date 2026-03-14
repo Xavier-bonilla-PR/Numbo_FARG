@@ -76,7 +76,7 @@ STACKED_TYPES = [
 def run_simulation(use_mock: bool, max_ticks: int) -> tuple[MetricsCollector, list]:
     from agents import Want
     from main_loop import run_loop
-    from slipnet import MockSlipnet, RealSlipnet
+    from travel_slipnet import MockSlipnet, RealSlipnet
     from workspace import Workspace
 
     slipnet = MockSlipnet() if use_mock else RealSlipnet()
@@ -324,7 +324,7 @@ def chart_perturbation_funnel(mc: MetricsCollector) -> go.Figure:
 
 def chart_temperature(mc: MetricsCollector) -> go.Figure:
     """Scatter: SuggestMode activation vs LLM temperature at each tick."""
-    from slipnet import temperature_for_activation
+    from travel_slipnet import temperature_for_activation
 
     ticks, activations, temps, labels = [], [], [], []
     for snap in mc.snapshots:
@@ -391,7 +391,7 @@ def chart_pending_llm(mc: MetricsCollector) -> go.Figure:
 
 def panel_path_comparison(paths: list) -> None:
     """Side-by-side cards for each complete path."""
-    from slipnet import temperature_for_activation
+    from travel_slipnet import temperature_for_activation
     from canvas import ImCell
 
     if not paths:
@@ -423,7 +423,7 @@ def panel_path_comparison(paths: list) -> None:
 # ── Baseline runner ───────────────────────────────────────────────────────────
 
 def run_baseline_pipeline(use_mock: bool) -> BaselineResult:
-    from slipnet import MockSlipnet, RealSlipnet
+    from travel_slipnet import MockSlipnet, RealSlipnet
     slipnet = MockSlipnet() if use_mock else RealSlipnet()
     pipeline = BaselinePipeline(slipnet)
     return pipeline.run()

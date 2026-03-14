@@ -210,7 +210,7 @@ class MetricsCollector:
         Temperature is derived from the activation recorded at each tick where
         a SuggestMode was the chosen agent (activation -> temperature via slipnet formula).
         """
-        from slipnet import temperature_for_activation
+        from travel_slipnet import temperature_for_activation
         result = []
         for snap in self.snapshots:
             if snap.chosen_type == "SuggestMode":
