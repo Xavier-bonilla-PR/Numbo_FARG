@@ -464,7 +464,7 @@ def main() -> None:
 
     # ── Run / load state ──────────────────────────────────────────────────────
     if run_btn:
-        with st.spinner("Running simulation… (check terminal for per-tick progress)"):
+        with st.spinner("Running simulation..."):
             mc, paths = run_simulation(
                 use_mock=use_mock or not os.getenv("OPENROUTER_API_KEY"),
                 max_ticks=max_ticks,

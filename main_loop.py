@@ -147,18 +147,10 @@ def get_complete_paths(ws) -> List[GoalReached]:
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
-def run_loop(
-    ws,
-    slipnet,
-    logger=None,
-    max_ticks: int = MAX_TICKS,
-) -> List[PathComplete]:
+def run_loop(ws, slipnet, logger=None, max_ticks: int = MAX_TICKS) -> List[PathComplete]:
     """Run the stochastic heartbeat.
 
-    Per-tick progress is written to the log at INFO level so it is visible
-    in the terminal where the dashboard was launched.
-
-    Returns a list of GoalReached tags (one per discovered canvas chain).
+    Returns a list of PathComplete tags (one per discovered path).
     """
     complete: List[PathComplete] = []
 
@@ -193,14 +185,7 @@ def run_loop(
         if chosen is None:
             continue
 
-        # ── 7. Log before the agent runs (visible before any LLM wait) ───────
-        log.info(
-            "Tick %3d/%d  elems=%d  canvas=%d  paths=%d  agent=%s",
-            tick, max_ticks, len(ws.elements), len(ws.canvas),
-            len(complete), type(chosen).__name__,
-        )
-
-        # ── 8. go() or act()? ─────────────────────────────────────────────
+        # ── 7. go() or act()? ─────────────────────────────────────────────
         # Early ticks strongly prefer go() to build up a rich ImCell population.
         # Later ticks allow act() to commit promising legs.
         acted = False
@@ -222,11 +207,11 @@ def run_loop(
             except Exception as exc:
                 log.warning("agent.go() error: %s – %s", chosen, exc)
 
-        # ── 9. Metrics log ────────────────────────────────────────────────
+        # ── 8. Log ────────────────────────────────────────────────────────
         if logger:
             logger.log_tick(tick, ws, chosen=chosen, complete=complete)
 
-        # ── 10. Prune ─────────────────────────────────────────────────────
+        # ── 9. Prune ──────────────────────────────────────────────────────
         ws.prune()
 
     # Final pass
