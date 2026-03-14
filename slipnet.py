@@ -91,7 +91,7 @@ async def _async_query(prompt: str, temperature: float) -> Dict[str, Any]:
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": temperature,
                     # Disable Qwen3 extended thinking so content is never null.
-                    "thinking": {"type": "disabled"},
+                    "reasoning": {"enabled": False},
                 },
             )
     elapsed = _time.monotonic() - t0
