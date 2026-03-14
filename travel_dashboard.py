@@ -403,6 +403,155 @@ def chart_pending_llm(mc: MetricsCollector) -> go.Figure:
     return fig
 
 
+def chart_exploration_depth(mc: MetricsCollector) -> go.Figure:
+    """Stacked bar: ImCells born at each depth, colored by first-stop direction.
+
+    Answers: how many distinct first-legs did FARG create ImCells for, and
+    how many survived to depth 2, depth 3, … ?
+    """
+    tree = mc.exploration_tree()
+    if not tree["births"]:
+        return go.Figure().update_layout(title="No ImCell births recorded yet")
+
+    depth_counts = tree["depth_counts"]
+    max_depth = max(depth_counts.keys())
+    all_first_stops = sorted(tree["first_stop_counts"].keys())
+
+    # For each first-stop, count how many ImCells at each depth started from it
+    from collections import defaultdict
+    depth_first: dict = defaultdict(lambda: defaultdict(int))
+    for rec in tree["births"]:
+        first = rec.legs[0].to_loc
+        depth_first[rec.depth][first] += 1
+
+    palette = ["#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b",
+               "#e377c2", "#17becf", "#bcbd22", "#aec7e8"]
+    color_map = {s: palette[i % len(palette)] for i, s in enumerate(all_first_stops)}
+
+    x_labels = [f"Depth {d}" for d in range(1, max_depth + 1)]
+
+    fig = go.Figure()
+    for first_stop in all_first_stops:
+        ys = [depth_first[d].get(first_stop, 0) for d in range(1, max_depth + 1)]
+        fig.add_trace(go.Bar(
+            name=f"via {first_stop}",
+            x=x_labels,
+            y=ys,
+            marker_color=color_map[first_stop],
+            hovertemplate=f"via {first_stop}<br>depth %{{x}}: %{{y}} ImCells<extra></extra>",
+        ))
+
+    # Annotate total per depth
+    for d in range(1, max_depth + 1):
+        total = depth_counts.get(d, 0)
+        fig.add_annotation(
+            x=f"Depth {d}", y=total,
+            text=str(total),
+            showarrow=False,
+            yshift=8,
+            font=dict(size=11, color="#333"),
+        )
+
+    n_unique_first = len(all_first_stops)
+    fig.update_layout(
+        title=(
+            f"Exploration Breadth vs Survival — "
+            f"{n_unique_first} distinct first-leg direction(s)<br>"
+            f"<sup>Each bar = ImCells born at that depth; stacked by first-stop city</sup>"
+        ),
+        xaxis_title="Exploration depth (legs in ImCell)",
+        yaxis_title="ImCells born",
+        barmode="stack",
+        legend=dict(orientation="h", y=1.14),
+        height=360,
+    )
+    return fig
+
+
+def chart_exploration_sankey(mc: MetricsCollector) -> go.Figure:
+    """Sankey diagram showing how FARG's exploration branched and was pruned.
+
+    Nodes = (city, depth_level) pairs — the same city at different depths is
+    a separate node so the tree structure is preserved.  GOAL collapses to one
+    terminal node regardless of depth.
+    """
+    tree = mc.exploration_tree()
+    if not tree["transitions"]:
+        return go.Figure().update_layout(title="No exploration data yet")
+
+    # ── Build node registry ────────────────────────────────────────────────────
+    node_tuples: list = []       # ordered list of (city, depth) tuples
+    node_index: dict = {}        # (city, depth) → int index
+
+    def _nid(city: str, depth: int) -> int:
+        key = (GOAL, 999) if city == GOAL else (city, depth)
+        if key not in node_index:
+            node_index[key] = len(node_tuples)
+            node_tuples.append(key)
+        return node_index[key]
+
+    # Pre-register START at depth 0
+    _nid(START, 0)
+
+    # ── Build links from transition dict ──────────────────────────────────────
+    link_sources, link_targets, link_values, link_labels = [], [], [], []
+    for (from_city, to_city, depth), count in sorted(tree["transitions"].items()):
+        src = _nid(from_city, depth - 1)
+        tgt = _nid(to_city, depth)
+        link_sources.append(src)
+        link_targets.append(tgt)
+        link_values.append(count)
+        link_labels.append(f"{from_city} → {to_city} (depth {depth}): {count}")
+
+    # ── Node display names and colours ────────────────────────────────────────
+    node_labels = []
+    node_colors = []
+    for city, depth in node_tuples:
+        if city == GOAL:
+            node_labels.append(f"GOAL\n{city}")
+            node_colors.append("#00e676")
+        elif depth == 0:
+            node_labels.append(f"START\n{city}")
+            node_colors.append("#1f77b4")
+        elif depth == 1:
+            node_labels.append(f"{city}\n(leg 1)")
+            node_colors.append("#ff7f0e")
+        else:
+            node_labels.append(f"{city}\n(leg {depth})")
+            node_colors.append("#9467bd")
+
+    total_births = len(tree["births"])
+    unique_first = len(tree["first_stop_counts"])
+
+    fig = go.Figure(go.Sankey(
+        arrangement="snap",
+        node=dict(
+            pad=24,
+            thickness=22,
+            line=dict(color="#444", width=0.6),
+            label=node_labels,
+            color=node_colors,
+        ),
+        link=dict(
+            source=link_sources,
+            target=link_targets,
+            value=link_values,
+            label=link_labels,
+            color="rgba(150,150,150,0.35)",
+        ),
+    ))
+    fig.update_layout(
+        title=(
+            f"ImCell Exploration Tree — {total_births} ImCells born, "
+            f"{unique_first} distinct first-leg direction(s)<br>"
+            "<sup>Link width = number of ImCells that used that edge; "
+            "pruned branches narrow as depth increases</sup>"
+        ),
+        height=500,
+    )
+    return fig
+
+
 def panel_path_comparison(paths: list) -> None:
     """Side-by-side cards for each complete path.
 
@@ -881,6 +1030,72 @@ def main() -> None:
         st.plotly_chart(chart_perturbation_funnel(mc), use_container_width=True)
     with c6:
         st.plotly_chart(chart_pending_llm(mc), use_container_width=True)
+
+    # ── Row 4b: Exploration Tree ──────────────────────────────────────────────
+    st.divider()
+    st.subheader("Exploration Tree — ImCell Lineage")
+    st.caption(
+        "Tracks every ImCell from birth. "
+        "Shows how many distinct first-leg directions FARG explored, "
+        "how many survived to deeper legs, and which reached the goal."
+    )
+
+    tree = mc.exploration_tree()
+    if tree["births"]:
+        max_depth = max(tree["depth_counts"].keys()) if tree["depth_counts"] else 0
+        n_unique_first = len(tree["first_stop_counts"])
+
+        tk1, tk2, tk3, tk4 = st.columns(4)
+        tk1.metric(
+            "Distinct first-leg directions",
+            n_unique_first,
+            help="Unique first intermediate cities across all ImCells (= exploration breadth).",
+        )
+        tk2.metric(
+            "ImCells born total",
+            len(tree["births"]),
+            help="Every speculative route fragment created during the run.",
+        )
+        tk3.metric(
+            "Max depth reached",
+            max_depth,
+            help="Longest ImCell chain (number of legs) seen in the workspace.",
+        )
+        tk4.metric(
+            "Paths reaching goal",
+            len(paths),
+            help="Canvas chains that committed all the way to the goal location.",
+        )
+
+        c_depth, c_sankey = st.columns([2, 3])
+        with c_depth:
+            st.plotly_chart(chart_exploration_depth(mc), use_container_width=True)
+        with c_sankey:
+            st.plotly_chart(chart_exploration_sankey(mc), use_container_width=True)
+
+        # Per-first-stop breakdown table
+        with st.expander("First-leg breakdown table"):
+            all_first_stops = sorted(tree["first_stop_counts"].keys())
+            all_depths = sorted(tree["depth_counts"].keys())
+            from collections import defaultdict
+            depth_first: dict = defaultdict(lambda: defaultdict(int))
+            goal_by_first: dict = defaultdict(int)
+            for rec in tree["births"]:
+                first = rec.legs[0].to_loc
+                depth_first[rec.depth][first] += 1
+                if rec.legs[-1].to_loc == GOAL:
+                    goal_by_first[first] += 1
+            table_rows = []
+            for first in all_first_stops:
+                row = {"First stop": first}
+                for d in all_depths:
+                    row[f"Depth {d}"] = depth_first[d].get(first, 0)
+                row["Reached goal"] = goal_by_first.get(first, 0)
+                table_rows.append(row)
+            st.dataframe(pd.DataFrame(table_rows).set_index("First stop"),
+                         use_container_width=True)
+    else:
+        st.info("Run the FARG simulation to see the exploration tree.")
 
     # ── Row 5: Path Comparison ────────────────────────────────────────────────
     st.divider()
