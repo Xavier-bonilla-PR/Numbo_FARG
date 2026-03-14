@@ -79,3 +79,21 @@ class PathComplete(Tag):
     """
     taggee: Any
     path: Tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class GoalReached(Tag):
+    """Marks a committed canvas chain (identified by path_id) that has reached GOAL.
+
+    Applied per chain in SuggestRoute.act() the moment the final committed leg
+    lands at the goal location — independently of ImCell feasibility scoring.
+    This ensures every canvas path that completes is declared, replacing the
+    single SolvedNumble-style halt with per-chain goal announcements.
+
+    path_id: stable identifier for this canvas chain.
+    path:    ordered tuple of location strings from START to GOAL.
+    legs:    tuple of committed Leg objects for this chain.
+    """
+    path_id: str
+    path: Tuple[str, ...]
+    legs: Tuple  # Tuple[Leg, ...]

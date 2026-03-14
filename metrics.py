@@ -77,7 +77,7 @@ class MetricsCollector:
     def _elem_type(elem: Any) -> str:
         from agents import Want, SuggestMode, SuggestRoute, SeekEvidence, Evaluate
         from canvas import ImCell
-        from tags import PendingLLM, Blocked, GettingCloser, PathComplete, GoIsDone, ActIsDone
+        from tags import PendingLLM, Blocked, GettingCloser, GoalReached, PathComplete, GoIsDone, ActIsDone
         if isinstance(elem, Want):           return "Want"
         if isinstance(elem, SuggestMode):   return "SuggestMode"
         if isinstance(elem, SuggestRoute):  return "SuggestRoute"
@@ -87,6 +87,7 @@ class MetricsCollector:
         if isinstance(elem, PendingLLM):    return "PendingLLM"
         if isinstance(elem, Blocked):       return "Blocked"
         if isinstance(elem, GettingCloser): return "GettingCloser"
+        if isinstance(elem, GoalReached):   return "GoalReached"
         if isinstance(elem, PathComplete):  return "PathComplete"
         if isinstance(elem, GoIsDone):      return "GoIsDone"
         if isinstance(elem, ActIsDone):     return "ActIsDone"

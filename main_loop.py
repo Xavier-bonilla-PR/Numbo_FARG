@@ -33,7 +33,7 @@ from typing import List, Optional
 from agents import AGENT_TYPES, Evaluate, SeekEvidence
 from canvas import ImCell
 from config import ACT_EARLY_PROB, ACT_LATE_TICK, GOAL, MAX_TICKS, MIN_COMPLETE_PATHS
-from tags import ActIsDone, Blocked, GettingCloser, GoIsDone, PathComplete
+from tags import ActIsDone, Blocked, GettingCloser, GoIsDone, GoalReached, PathComplete
 
 log = logging.getLogger(__name__)
 
@@ -136,8 +136,13 @@ def run_detectors(ws) -> None:
 
 # ── Complete-path query ───────────────────────────────────────────────────────
 
-def get_complete_paths(ws) -> List[PathComplete]:
-    return [t for t in ws.tags if isinstance(t, PathComplete)]
+def get_complete_paths(ws) -> List[GoalReached]:
+    """Return all per-chain GoalReached tags (one per canvas chain at GOAL).
+
+    Uses GoalReached instead of PathComplete so every committed canvas chain
+    that finishes is declared — not just the first MIN_COMPLETE_PATHS.
+    """
+    return [t for t in ws.tags if isinstance(t, GoalReached)]
 
 
 # ── Main loop ─────────────────────────────────────────────────────────────────

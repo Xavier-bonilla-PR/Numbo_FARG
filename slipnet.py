@@ -37,14 +37,29 @@ _semaphore = asyncio.Semaphore(MAX_CONCURRENT_LLM)
 
 # ── Temperature helper ────────────────────────────────────────────────────────
 
-def temperature_for_activation(activation: float) -> float:
-    """Map agent activation [0.0, 1.0] → LLM temperature [0.9, 0.2].
+def temperature_for_activation(activation: float, depth: int = 0) -> float:
+    """Map (activation, chain_depth) → LLM temperature.
 
-    High-activation agents are "confident" → low temperature (precise).
-    Low-activation agents are "exploring" → high temperature (creative).
+    Two factors compose the temperature:
+
+    f(activation) = 0.9 - 0.7 * activation
+        High-activation agents are "confident" → low temperature (precise).
+        Low-activation agents are "exploring"  → high temperature (creative).
+
+    g(depth) = max(0.2, 1.0 - 0.15 * depth)
+        Fresh legs (depth 0–1) keep full temperature  → speculative.
+        Deep chains (depth ≥ 5) are clamped to 0.2×  → committed evaluation.
+
+    temperature = f(activation) * g(depth)
+
+    This separates exploration/exploitation at the LLM call level: a low-
+    activation agent on a deep chain is still evaluated precisely (low T),
+    not allowed to hallucinate freely just because its activation dropped.
     """
     clamped = min(1.0, max(0.0, activation))
-    return round(0.9 - 0.7 * clamped, 3)
+    base = 0.9 - 0.7 * clamped
+    depth_factor = max(0.2, 1.0 - 0.15 * depth)
+    return round(base * depth_factor, 3)
 
 
 # ── Async LLM call ────────────────────────────────────────────────────────────
@@ -131,8 +146,9 @@ class RealSlipnet:
         mode: str,
         activation: float = 0.5,
         visited_locs: Optional[List[str]] = None,
+        depth: int = 0,
     ) -> Optional[Dict[str, Any]]:
-        temp = temperature_for_activation(activation)
+        temp = temperature_for_activation(activation, depth)
         # Inject path memory so the LLM avoids backtracking.
         if visited_locs and len(visited_locs) > 1:
             history = " -> ".join(visited_locs)
@@ -169,8 +185,9 @@ class RealSlipnet:
         legs: Any,
         activation: float = 0.5,
     ) -> float:
-        temp = temperature_for_activation(activation)
-        legs_desc = " → ".join(f"{l.from_loc}→{l.to_loc}({l.mode})" for l in legs)
+        legs_list = list(legs)
+        temp = temperature_for_activation(activation, depth=len(legs_list))
+        legs_desc = " → ".join(f"{l.from_loc}→{l.to_loc}({l.mode})" for l in legs_list)
         prompt = (
             f"You are a Vietnam travel expert. "
             f"Return JSON ONLY (no markdown). "
@@ -191,7 +208,8 @@ class RealSlipnet:
         imcell_b: Any,
         activation: float = 0.5,
     ) -> str:
-        temp = temperature_for_activation(activation)
+        avg_depth = (len(imcell_a.legs) + len(imcell_b.legs)) // 2
+        temp = temperature_for_activation(activation, depth=avg_depth)
         desc_a = " → ".join(l.to_loc for l in imcell_a.legs) or imcell_a.current_loc
         desc_b = " → ".join(l.to_loc for l in imcell_b.legs) or imcell_b.current_loc
         prompt = (
@@ -332,6 +350,7 @@ class MockSlipnet:
         mode: str,
         activation: float = 0.5,
         visited_locs: Optional[List[str]] = None,
+        depth: int = 0,
     ) -> Optional[Dict[str, Any]]:
         key = (from_loc, to_loc, mode)
         return self._ROUTES.get(key)

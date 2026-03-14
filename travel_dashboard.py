@@ -59,6 +59,7 @@ TYPE_COLORS = {
     "Blocked":       "#7f7f7f",
     "GettingCloser": "#bcbd22",
     "PathComplete":  "#17becf",
+    "GoalReached":   "#00e676",   # bright green — canvas chain hit goal
     "GoIsDone":      "#aec7e8",
     "ActIsDone":     "#ffbb78",
     "Other":         "#c7c7c7",
@@ -355,10 +356,10 @@ def chart_temperature(mc: MetricsCollector) -> go.Figure:
         x=list(a_range), y=t_range,
         mode="lines",
         line=dict(color="red", width=2, dash="dash"),
-        name="Formula: T = 0.9 - 0.7a",
+        name="Formula: T = (0.9-0.7a) × max(0.2, 1-0.15d)  [d=0 shown]",
     ))
     fig.update_layout(
-        title="Dynamic Temperature Tracker (Activation -> LLM Temperature)",
+        title="Dynamic Temperature Tracker — T = f(activation) × g(depth)",
         xaxis_title="Agent Activation",
         yaxis_title="LLM Temperature",
         xaxis=dict(range=[0, 1.05]),
@@ -389,9 +390,12 @@ def chart_pending_llm(mc: MetricsCollector) -> go.Figure:
 
 
 def panel_path_comparison(paths: list) -> None:
-    """Side-by-side cards for each complete path."""
-    from slipnet import temperature_for_activation
-    from canvas import ImCell
+    """Side-by-side cards for each complete path.
+
+    Accepts GoalReached tags (canvas-chain completions with .path_id, .legs,
+    .path) as well as legacy PathComplete tags (ImCell-based, with .taggee).
+    """
+    from tags import GoalReached
 
     if not paths:
         st.warning("No complete paths found.")
@@ -400,13 +404,21 @@ def panel_path_comparison(paths: list) -> None:
     cols = st.columns(min(len(paths), 3))
     for i, pc in enumerate(paths):
         col = cols[i % len(cols)]
-        imcell = pc.taggee
         with col:
-            st.markdown(f"### Path {imcell.path_id}")
-            total_h = sum(l.duration_hours for l in imcell.legs)
+            # Resolve fields from either tag type
+            if isinstance(pc, GoalReached):
+                path_id = pc.path_id
+                legs = pc.legs
+            else:
+                # Legacy PathComplete: taggee is an ImCell
+                path_id = pc.taggee.path_id
+                legs = pc.taggee.legs
+
+            st.markdown(f"### Path {path_id}")
+            total_h = sum(l.duration_hours for l in legs)
             st.metric("Total hours", f"{total_h:.1f} h")
-            st.metric("Legs", len(imcell.legs))
-            for leg in imcell.legs:
+            st.metric("Legs", len(legs))
+            for leg in legs:
                 is_goal_leg = leg.to_loc == GOAL
                 badge = ":green[GOAL]" if is_goal_leg else ""
                 st.markdown(
@@ -444,7 +456,7 @@ def main() -> None:
         st.divider()
         st.markdown("**Legend**")
         for ttype, color in TYPE_COLORS.items():
-            if ttype in STACKED_TYPES + ["ImCell", "PathComplete"]:
+            if ttype in STACKED_TYPES + ["ImCell", "PathComplete", "GoalReached"]:
                 st.markdown(
                     f'<span style="color:{color}">■</span> {ttype}',
                     unsafe_allow_html=True,
