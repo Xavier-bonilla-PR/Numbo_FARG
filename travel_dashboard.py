@@ -431,6 +431,133 @@ def panel_path_comparison(paths: list) -> None:
             st.code(route_str, language=None)
 
 
+def chart_farg_vs_baseline(farg_paths: list, base_run) -> go.Figure:
+    """Grouped bar chart: quality score per path, FARG vs Baseline."""
+    from tags import GoalReached
+    from slipnet import MockSlipnet
+
+    bars: dict = {"label": [], "score": [], "hours": [], "system": [], "colour": []}
+
+    for pc in farg_paths:
+        if isinstance(pc, GoalReached):
+            pid, legs = pc.path_id, pc.legs
+        else:
+            pid, legs = pc.taggee.path_id, pc.taggee.legs
+        route = " -> ".join(pc.path)
+        bars["label"].append(f"FARG {pid}")
+        bars["score"].append(None)   # FARG doesn't store a single score; use hours proxy
+        bars["hours"].append(sum(l.duration_hours for l in legs))
+        bars["system"].append("FARG")
+        bars["colour"].append("#1f77b4")
+
+    for r in base_run.paths:
+        bars["label"].append(f"Baseline [{r.mode}]")
+        bars["score"].append(r.score)
+        bars["hours"].append(r.total_hours())
+        bars["system"].append("Baseline")
+        bars["colour"].append("#ff7f0e")
+
+    fig = go.Figure()
+
+    # Hours bars (left y-axis)
+    fig.add_trace(go.Bar(
+        name="Total hours",
+        x=bars["label"],
+        y=bars["hours"],
+        marker_color=bars["colour"],
+        opacity=0.75,
+        yaxis="y",
+        text=[f"{h:.1f}h" for h in bars["hours"]],
+        textposition="outside",
+    ))
+
+    # Score overlay for baseline (right y-axis)
+    baseline_x = [l for l, s in zip(bars["label"], bars["score"]) if s is not None]
+    baseline_s = [s for s in bars["score"] if s is not None]
+    if baseline_s:
+        fig.add_trace(go.Scatter(
+            name="Quality score (baseline)",
+            x=baseline_x,
+            y=baseline_s,
+            mode="markers",
+            marker=dict(symbol="diamond", size=12, color="#d62728"),
+            yaxis="y2",
+        ))
+
+    fig.update_layout(
+        title="FARG vs Baseline — Travel Hours & Quality Score",
+        xaxis_title="Path",
+        yaxis=dict(title="Total hours", side="left"),
+        yaxis2=dict(title="Quality score [0–1]", side="right", overlaying="y",
+                    range=[0, 1.1]),
+        legend=dict(orientation="h"),
+        barmode="group",
+        height=400,
+    )
+    return fig
+
+
+def panel_farg_vs_baseline(farg_paths: list, base_run) -> None:
+    """Full FARG vs Baseline comparison section."""
+    from tags import GoalReached
+
+    st.subheader("FARG vs Baseline — Head-to-Head")
+    st.caption(
+        "Left: paths found by the FARG cognitive architecture (activation, "
+        "competition, chain coherence).  Right: same LLM, same prompts, "
+        "fixed sequential pipeline — no dynamics."
+    )
+
+    # ── KPI row ───────────────────────────────────────────────────────────────
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("FARG paths", len(farg_paths))
+    k2.metric("Baseline paths", len(base_run.paths))
+    k3.metric("Baseline LLM calls", base_run.llm_calls)
+    k4.metric("Baseline modes tried", f"{base_run.modes_complete}/{base_run.modes_tried}")
+
+    st.plotly_chart(chart_farg_vs_baseline(farg_paths, base_run), use_container_width=True)
+
+    # ── Side-by-side path cards ────────────────────────────────────────────────
+    col_farg, col_base = st.columns(2)
+
+    with col_farg:
+        st.markdown("#### FARG paths")
+        if not farg_paths:
+            st.warning("No FARG paths — run the FARG simulation first.")
+        for pc in farg_paths:
+            if isinstance(pc, GoalReached):
+                pid, legs, path = pc.path_id, pc.legs, pc.path
+            else:
+                pid, legs, path = pc.taggee.path_id, pc.taggee.legs, pc.path
+            with st.container(border=True):
+                st.markdown(f"**{pid}** — {sum(l.duration_hours for l in legs):.1f} h")
+                for leg in legs:
+                    badge = " :green[GOAL]" if leg.to_loc == GOAL else ""
+                    st.markdown(
+                        f"`{leg.from_loc}` --[{leg.mode}]--> `{leg.to_loc}` "
+                        f"({leg.duration_hours:.1f}h){badge}"
+                    )
+                st.code(" -> ".join(path), language=None)
+
+    with col_base:
+        st.markdown("#### Baseline paths")
+        if not base_run.paths:
+            st.warning("No baseline paths — run the baseline pipeline first.")
+        for r in base_run.paths:
+            with st.container(border=True):
+                st.markdown(
+                    f"**{r.mode}** — {r.total_hours():.1f} h  "
+                    f"score: **{r.score:.2f}**"
+                )
+                for leg in r.legs:
+                    badge = " :green[GOAL]" if leg.to_loc == GOAL else ""
+                    st.markdown(
+                        f"`{leg.from_loc}` --[{leg.mode}]--> `{leg.to_loc}` "
+                        f"({leg.duration_hours:.1f}h){badge}"
+                    )
+                st.code(" -> ".join(r.path), language=None)
+
+
 # ── Main Streamlit app ────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -448,7 +575,8 @@ def main() -> None:
         use_mock = st.toggle("Use MockSlipnet (no API calls)", value=True)
         max_ticks = st.slider("Max ticks", 20, 200, MAX_TICKS, step=10)
         top_n = st.slider("Activation timeline: top-N elements", 5, 40, 15, step=5)
-        run_btn = st.button("Run Simulation", type="primary", use_container_width=True)
+        run_btn = st.button("Run FARG Simulation", type="primary", use_container_width=True)
+        base_btn = st.button("Run Baseline (no dynamics)", use_container_width=True)
 
         if not use_mock and not os.getenv("OPENROUTER_API_KEY"):
             st.warning("OPENROUTER_API_KEY not set — will fall back to mock.")
@@ -463,15 +591,26 @@ def main() -> None:
                 )
 
     # ── Run / load state ──────────────────────────────────────────────────────
+    _use_mock = use_mock or not os.getenv("OPENROUTER_API_KEY")
+
     if run_btn:
-        with st.spinner("Running simulation..."):
-            mc, paths = run_simulation(
-                use_mock=use_mock or not os.getenv("OPENROUTER_API_KEY"),
-                max_ticks=max_ticks,
-            )
+        with st.spinner("Running FARG simulation..."):
+            mc, paths = run_simulation(use_mock=_use_mock, max_ticks=max_ticks)
         st.session_state["mc"] = mc
         st.session_state["paths"] = paths
         st.success(f"Done — {len(paths)} path(s) found in {len(mc.snapshots)} ticks.")
+
+    if base_btn:
+        from baseline import run_baseline
+        from slipnet import MockSlipnet, RealSlipnet
+        with st.spinner("Running baseline pipeline..."):
+            sl = MockSlipnet() if _use_mock else RealSlipnet()
+            base_run = run_baseline(sl, START, GOAL)
+        st.session_state["base_run"] = base_run
+        st.success(
+            f"Baseline done — {base_run.modes_complete}/{base_run.modes_tried} modes "
+            f"reached goal in {base_run.llm_calls} LLM calls."
+        )
 
     mc: MetricsCollector | None = st.session_state.get("mc")
     paths: list = st.session_state.get("paths", [])
@@ -528,6 +667,17 @@ def main() -> None:
     st.divider()
     st.subheader("Path Comparison Panel")
     panel_path_comparison(paths)
+
+    # ── Row 6: FARG vs Baseline comparison ────────────────────────────────────
+    base_run = st.session_state.get("base_run")
+    if base_run is not None or paths:
+        st.divider()
+        if base_run is None:
+            st.info("Click **Run Baseline (no dynamics)** in the sidebar to enable head-to-head comparison.")
+        elif not paths:
+            st.info("Click **Run FARG Simulation** to add FARG paths to the comparison.")
+        else:
+            panel_farg_vs_baseline(paths, base_run)
 
     # ── Raw data expander ─────────────────────────────────────────────────────
     with st.expander("Raw snapshot data (DataFrame)"):
