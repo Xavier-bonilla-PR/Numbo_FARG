@@ -67,6 +67,75 @@ def temperature_for_activation(activation: float, depth: int = 0) -> float:
 import time as _time
 
 
+import re as _re
+import ast as _ast
+
+
+def _extract_json(raw: str) -> Dict[str, Any]:
+    """Robustly extract a JSON object from an LLM response.
+
+    Handles the three most common LLM formatting problems:
+      1. Markdown code fences:  ```json { … } ```
+      2. Surrounding prose before/after the JSON object
+      3. Python-style single-quoted dicts (ast.literal_eval fallback)
+    """
+    if not raw:
+        raise ValueError("Empty LLM response")
+
+    # Strip markdown code fences (```json ... ``` or ``` ... ```)
+    raw = _re.sub(r"```(?:json)?\s*", "", raw).strip()
+    raw = raw.replace("```", "").strip()
+
+    # Find the outermost { } pair using a bracket counter
+    start = raw.find("{")
+    if start == -1:
+        raise ValueError(f"No JSON object found in response: {raw[:120]!r}")
+
+    depth = 0
+    end = -1
+    in_str = False
+    escape = False
+    for i, ch in enumerate(raw[start:], start):
+        if escape:
+            escape = False
+            continue
+        if ch == "\\" and in_str:
+            escape = True
+            continue
+        if ch == '"' and not escape:
+            in_str = not in_str
+        if in_str:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+
+    if end == -1:
+        raise ValueError(f"Unclosed JSON object in response: {raw[:120]!r}")
+
+    candidate = raw[start:end]
+
+    # Standard JSON parse (fast path)
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        pass
+
+    # Fallback: ast.literal_eval handles Python-style single-quoted dicts
+    try:
+        result = _ast.literal_eval(candidate)
+        if isinstance(result, dict):
+            return result
+    except (ValueError, SyntaxError):
+        pass
+
+    raise ValueError(f"Could not parse JSON from: {candidate[:120]!r}")
+
+
 async def _async_query(prompt: str, temperature: float) -> Dict[str, Any]:
     """Send a single chat-completion request; return parsed JSON dict.
 
@@ -105,7 +174,7 @@ async def _async_query(prompt: str, temperature: float) -> Dict[str, Any]:
         # The JSON answer follows </think> if present, else use full reasoning.
         raw = reasoning.split("</think>")[-1].strip() if "</think>" in reasoning else reasoning.strip()
     log.debug("LLM raw content: %.200s", raw)
-    return json.loads(raw)
+    return _extract_json(raw)
 
 
 def _run_async(coro) -> Any:
