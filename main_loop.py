@@ -166,6 +166,11 @@ def run_loop(
 
     for tick in range(max_ticks):
 
+        # ── Fire callback immediately so the UI shows the current tick number
+        #    BEFORE any potentially slow LLM call this tick makes.
+        if tick_callback:
+            tick_callback(tick, max_ticks, len(complete), "…")
+
         # ── 1. Decay ──────────────────────────────────────────────────────
         ws.decay_all()
 
@@ -189,8 +194,6 @@ def run_loop(
             log.debug("Tick %d: no eligible agents.", tick)
             if logger:
                 logger.log_tick(tick, ws, chosen=None, complete=complete)
-            if tick_callback:
-                tick_callback(tick, max_ticks, len(complete), "—")
             ws.prune()
             continue
 
@@ -199,7 +202,17 @@ def run_loop(
         if chosen is None:
             continue
 
-        # ── 7. go() or act()? ─────────────────────────────────────────────
+        # ── 7. Announce agent BEFORE the blocking call ────────────────────
+        chosen_label = type(chosen).__name__
+        log.info(
+            "Tick %3d/%d  elems=%d  canvas=%d  paths=%d  agent=%s",
+            tick, max_ticks, len(ws.elements), len(ws.canvas),
+            len(complete), chosen_label,
+        )
+        if tick_callback:
+            tick_callback(tick, max_ticks, len(complete), chosen_label)
+
+        # ── 8. go() or act()? ─────────────────────────────────────────────
         # Early ticks strongly prefer go() to build up a rich ImCell population.
         # Later ticks allow act() to commit promising legs.
         acted = False
@@ -221,15 +234,7 @@ def run_loop(
             except Exception as exc:
                 log.warning("agent.go() error: %s – %s", chosen, exc)
 
-        # ── 8. Log / progress callback ────────────────────────────────────
-        chosen_label = type(chosen).__name__ if chosen else "—"
-        log.info(
-            "Tick %3d/%d  elems=%d  canvas=%d  paths=%d  agent=%s",
-            tick, max_ticks, len(ws.elements), len(ws.canvas),
-            len(complete), chosen_label,
-        )
-        if tick_callback:
-            tick_callback(tick, max_ticks, len(complete), chosen_label)
+        # ── 9. Metrics log ────────────────────────────────────────────────
         if logger:
             logger.log_tick(tick, ws, chosen=chosen, complete=complete)
 
