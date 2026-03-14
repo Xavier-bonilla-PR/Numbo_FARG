@@ -403,13 +403,14 @@ def chart_pending_llm(mc: MetricsCollector) -> go.Figure:
     return fig
 
 
-def chart_exploration_depth(mc: MetricsCollector) -> go.Figure:
+def chart_exploration_depth(tree: dict) -> go.Figure:
     """Stacked bar: ImCells born at each depth, colored by first-stop direction.
 
     Answers: how many distinct first-legs did FARG create ImCells for, and
     how many survived to depth 2, depth 3, … ?
+    Accepts the dict returned by MetricsCollector.exploration_tree() (or
+    _aggregate_tree()) directly so it works for both single- and multi-run views.
     """
-    tree = mc.exploration_tree()
     if not tree["births"]:
         return go.Figure().update_layout(title="No ImCell births recorded yet")
 
@@ -468,14 +469,14 @@ def chart_exploration_depth(mc: MetricsCollector) -> go.Figure:
     return fig
 
 
-def chart_exploration_sankey(mc: MetricsCollector) -> go.Figure:
+def chart_exploration_sankey(tree: dict) -> go.Figure:
     """Sankey diagram showing how FARG's exploration branched and was pruned.
 
     Nodes = (city, depth_level) pairs — the same city at different depths is
     a separate node so the tree structure is preserved.  GOAL collapses to one
     terminal node regardless of depth.
+    Accepts an exploration_tree() dict directly (single- or multi-run).
     """
-    tree = mc.exploration_tree()
     if not tree["transitions"]:
         return go.Figure().update_layout(title="No exploration data yet")
 
@@ -921,6 +922,304 @@ def panel_farg_vs_baseline(farg_paths: list, farg_scores: dict,
                 st.code(" -> ".join(r.path), language=None)
 
 
+# ── Multi-run helpers ─────────────────────────────────────────────────────────
+
+import statistics as _stats
+from collections import Counter as _Counter
+
+
+def _score_stats(scores: list) -> dict:
+    """Descriptive statistics for a list of float scores."""
+    if not scores:
+        return {k: None for k in
+                ["n", "mean", "median", "stdev", "variance", "min", "max", "iqr", "mode"]}
+    n = len(scores)
+    mean     = _stats.mean(scores)
+    median   = _stats.median(scores)
+    stdev    = _stats.pstdev(scores)      # population stdev (all observed paths = pop.)
+    variance = _stats.pvariance(scores)
+    s_min    = min(scores)
+    s_max    = max(scores)
+    srt      = sorted(scores)
+    q1       = srt[n // 4]
+    q3       = srt[min((3 * n) // 4, n - 1)]
+    iqr      = q3 - q1
+    # Mode: bucket to nearest 0.05 so it's meaningful for continuous scores
+    buckets  = [round(round(s / 0.05) * 0.05, 2) for s in scores]
+    mode_val = _Counter(buckets).most_common(1)[0][0]
+    return dict(n=n, mean=mean, median=median, stdev=stdev, variance=variance,
+                min=s_min, max=s_max, iqr=iqr, mode=mode_val)
+
+
+def _aggregate_tree(farg_history: list) -> dict:
+    """Merge ImCellBirthRecords from all FARG runs into one exploration_tree dict."""
+    all_births = []
+    for run in farg_history:
+        all_births.extend(run["mc"].imcell_births)
+    if not all_births:
+        return {"births": [], "depth_counts": {}, "transitions": {}, "first_stop_counts": {}}
+
+    depth_counts: dict = {}
+    transitions: dict  = {}
+    first_stop_counts: dict = {}
+    for rec in all_births:
+        depth_counts[rec.depth] = depth_counts.get(rec.depth, 0) + 1
+        if rec.depth >= 1:
+            first = rec.legs[0].to_loc
+            first_stop_counts[first] = first_stop_counts.get(first, 0) + 1
+        from_city = rec.legs[-2].to_loc if rec.depth > 1 else rec.legs[0].from_loc
+        to_city   = rec.legs[-1].to_loc
+        key       = (from_city, to_city, rec.depth)
+        transitions[key] = transitions.get(key, 0) + 1
+
+    return dict(births=all_births, depth_counts=depth_counts,
+                transitions=transitions, first_stop_counts=first_stop_counts)
+
+
+def chart_score_distribution(farg_history: list, base_history: list) -> go.Figure:
+    """Violin + box plot of scores across all runs for each system."""
+    farg_scores = [s for r in farg_history for s in r["farg_scores"].values()]
+    base_scores = [p.score for r in base_history for p in r.paths]
+
+    fig = go.Figure()
+    if farg_scores:
+        fig.add_trace(go.Violin(
+            y=farg_scores,
+            name=f"FARG (n={len(farg_scores)})",
+            box_visible=True, meanline_visible=True,
+            points="all", jitter=0.35, pointpos=-1.6,
+            marker=dict(color="#1f77b4", size=5, opacity=0.55),
+            line_color="#1f77b4",
+            fillcolor="rgba(31,119,180,0.22)",
+            hovertemplate="FARG score: %{y:.3f}<extra></extra>",
+        ))
+    if base_scores:
+        fig.add_trace(go.Violin(
+            y=base_scores,
+            name=f"Baseline (n={len(base_scores)})",
+            box_visible=True, meanline_visible=True,
+            points="all", jitter=0.35, pointpos=1.6,
+            marker=dict(color="#ff7f0e", size=5, opacity=0.55),
+            line_color="#ff7f0e",
+            fillcolor="rgba(255,127,14,0.22)",
+            hovertemplate="Baseline score: %{y:.3f}<extra></extra>",
+        ))
+    fig.update_layout(
+        title=(
+            f"Score Distribution — "
+            f"{len(farg_history)} FARG / {len(base_history)} Baseline run(s)"
+        ),
+        yaxis=dict(title="Quality score [0–1]", range=[0, 1.1]),
+        violinmode="group",
+        height=420,
+    )
+    return fig
+
+
+def chart_per_run_trend(farg_history: list, base_history: list) -> go.Figure:
+    """Avg score per run with shaded min/max envelope — shows stability."""
+    fig = go.Figure()
+
+    _SYSTEMS = [
+        # (history, label, line_color, fill_color, score_iter)
+        (farg_history, "FARG",     "#1f77b4", "rgba(31,119,180,0.12)",
+         lambda r: list(r["farg_scores"].values())),
+        (base_history, "Baseline", "#ff7f0e", "rgba(255,127,14,0.12)",
+         lambda r: [p.score for p in r.paths]),
+    ]
+    for history, label, lc, fc, scores_fn in _SYSTEMS:
+        if not history:
+            continue
+        xs    = list(range(1, len(history) + 1))
+        sc    = [scores_fn(r) for r in history]
+        avgs  = [sum(s) / max(1, len(s)) for s in sc]
+        maxes = [max(s, default=0.0) for s in sc]
+        mins  = [min(s, default=0.0) for s in sc]
+        fig.add_trace(go.Scatter(
+            x=xs + xs[::-1], y=maxes + mins[::-1],
+            fill="toself", fillcolor=fc,
+            line=dict(color="rgba(0,0,0,0)"),
+            name=f"{label} min/max range", hoverinfo="skip",
+        ))
+        fig.add_trace(go.Scatter(
+            x=xs, y=avgs, mode="lines+markers",
+            name=f"{label} avg",
+            line=dict(color=lc, width=2),
+            marker=dict(size=7, color=lc),
+            hovertemplate=f"Run %{{x}}: avg=%{{y:.3f}}<extra>{label}</extra>",
+        ))
+
+    fig.update_layout(
+        title="Score Stability — avg (± min/max) per run",
+        xaxis_title="Run index",
+        yaxis=dict(title="Quality score [0–1]", range=[0, 1.1]),
+        legend=dict(orientation="h", y=1.14),
+        height=360,
+    )
+    return fig
+
+
+def panel_multi_run_stats(farg_history: list, base_history: list) -> None:
+    """Full statistical comparison across all accumulated runs."""
+    from tags import GoalReached
+
+    st.subheader("Multi-Run Statistical Analysis")
+
+    if not farg_history and not base_history:
+        st.info(
+            "Set **Runs per click ≥ 2** and click Run buttons to accumulate history. "
+            "Stats appear here once you have at least one run of each system."
+        )
+        return
+
+    farg_all_scores = [s for r in farg_history for s in r["farg_scores"].values()]
+    base_all_scores = [p.score for r in base_history for p in r.paths]
+    farg_st = _score_stats(farg_all_scores)
+    base_st = _score_stats(base_all_scores)
+
+    # ── Top KPI row ───────────────────────────────────────────────────────────
+    kk1, kk2, kk3, kk4 = st.columns(4)
+    kk1.metric("FARG runs", len(farg_history))
+    kk2.metric("Baseline runs", len(base_history))
+    kk3.metric(
+        "FARG total paths",
+        len(farg_all_scores),
+        f"{len(farg_all_scores)/max(1,len(farg_history)):.1f}/run avg",
+    )
+    kk4.metric(
+        "Baseline total paths",
+        len(base_all_scores),
+        f"{len(base_all_scores)/max(1,len(base_history)):.1f}/run avg",
+    )
+
+    # ── Descriptive stats table ───────────────────────────────────────────────
+    st.markdown("**Descriptive Statistics (all paths, all runs)**")
+
+    def _fmt(v):
+        return f"{v:.4f}" if v is not None else "—"
+
+    stats_rows = [
+        ("Mean score",         farg_st["mean"],     base_st["mean"]),
+        ("Median score",       farg_st["median"],   base_st["median"]),
+        ("Std deviation (σ)",  farg_st["stdev"],    base_st["stdev"]),
+        ("Variance (σ²)",      farg_st["variance"], base_st["variance"]),
+        ("Min (abs. lowest)",  farg_st["min"],      base_st["min"]),
+        ("Max (abs. highest)", farg_st["max"],      base_st["max"]),
+        ("IQR (Q3 − Q1)",      farg_st["iqr"],      base_st["iqr"]),
+        ("Mode (±0.05)",       farg_st["mode"],     base_st["mode"]),
+        ("N paths",            farg_st["n"],        base_st["n"]),
+    ]
+    stats_df = pd.DataFrame(
+        [(m, _fmt(f), _fmt(b)) for m, f, b in stats_rows],
+        columns=["Metric", "FARG", "Baseline"],
+    )
+    st.dataframe(stats_df.set_index("Metric"), use_container_width=True)
+
+    # ── Charts ────────────────────────────────────────────────────────────────
+    cv1, cv2 = st.columns(2)
+    with cv1:
+        st.plotly_chart(
+            chart_score_distribution(farg_history, base_history),
+            use_container_width=True,
+        )
+    with cv2:
+        st.plotly_chart(
+            chart_per_run_trend(farg_history, base_history),
+            use_container_width=True,
+        )
+
+    # ── Novel routes ──────────────────────────────────────────────────────────
+    if farg_history and base_history:
+        st.divider()
+        st.markdown("**Novel Routes — FARG directions not explored by Baseline**")
+        st.caption(
+            "A route is *novel* when its first intermediate city never appeared "
+            "in any baseline run's paths."
+        )
+
+        baseline_first_cities: set = set()
+        for run in base_history:
+            for r in run.paths:
+                if r.legs:
+                    baseline_first_cities.add(r.legs[0].to_loc)
+
+        novel_paths, total_farg_paths = [], 0
+        farg_unique_routes: set = set()
+        base_unique_routes: set = set()
+        for run in farg_history:
+            for pc in run["paths"]:
+                total_farg_paths += 1
+                farg_unique_routes.add(pc.path)
+                legs = pc.legs if isinstance(pc, GoalReached) else pc.taggee.legs
+                if legs and legs[0].to_loc not in baseline_first_cities:
+                    novel_paths.append(pc)
+        for run in base_history:
+            for r in run.paths:
+                base_unique_routes.add(tuple(r.path))
+
+        novel_first_cities = set()
+        for pc in novel_paths:
+            legs = pc.legs if isinstance(pc, GoalReached) else pc.taggee.legs
+            if legs:
+                novel_first_cities.add(legs[0].to_loc)
+
+        nr1, nr2, nr3, nr4 = st.columns(4)
+        nr1.metric(
+            "Novel FARG paths",
+            f"{len(novel_paths)} / {total_farg_paths}",
+            help="Paths whose first-leg destination was never tried by Baseline.",
+        )
+        nr2.metric(
+            "Novel first-leg cities",
+            len(novel_first_cities),
+            help=", ".join(sorted(novel_first_cities)) or "none",
+        )
+        nr3.metric(
+            "Unique FARG routes",
+            len(farg_unique_routes),
+            help="Distinct city-sequence signatures across all FARG runs.",
+        )
+        nr4.metric(
+            "Unique Baseline routes",
+            len(base_unique_routes),
+            help="Distinct city-sequence signatures across all Baseline runs.",
+        )
+        if novel_first_cities:
+            st.caption(
+                f"Novel first-leg directions (FARG only): "
+                f"**{', '.join(sorted(novel_first_cities))}**"
+            )
+        if baseline_first_cities:
+            st.caption(
+                f"Baseline first-leg directions seen: "
+                f"{', '.join(sorted(baseline_first_cities))}"
+            )
+
+    # ── Aggregate exploration tree ────────────────────────────────────────────
+    if farg_history:
+        st.divider()
+        st.markdown(
+            f"**Aggregate Exploration Tree — {len(farg_history)} FARG run(s) combined**"
+        )
+        st.caption(
+            "All ImCell births across every run merged into one tree. "
+            "Wider Sankey links = that edge was taken more often across runs."
+        )
+        agg = _aggregate_tree(farg_history)
+        if agg["births"]:
+            max_d = max(agg["depth_counts"].keys(), default=0)
+            at1, at2, at3 = st.columns(3)
+            at1.metric("Combined ImCell births", len(agg["births"]))
+            at2.metric("Distinct first-leg directions", len(agg["first_stop_counts"]))
+            at3.metric("Max depth reached", max_d)
+
+            ac1, ac2 = st.columns([2, 3])
+            with ac1:
+                st.plotly_chart(chart_exploration_depth(agg), use_container_width=True)
+            with ac2:
+                st.plotly_chart(chart_exploration_sankey(agg), use_container_width=True)
+
+
 # ── Main Streamlit app ────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -938,11 +1237,43 @@ def main() -> None:
         use_mock = st.toggle("Use MockSlipnet (no API calls)", value=True)
         max_ticks = st.slider("Max ticks", 20, 200, MAX_TICKS, step=10)
         top_n = st.slider("Activation timeline: top-N elements", 5, 40, 15, step=5)
-        run_btn = st.button("Run FARG Simulation", type="primary", use_container_width=True)
-        base_btn = st.button("Run Baseline (no dynamics)", use_container_width=True)
+        n_runs = st.number_input(
+            "Runs per click", min_value=1, max_value=50, value=1, step=1,
+            help="How many independent runs to add to history on each button click.",
+        )
+        run_btn = st.button(
+            f"Run FARG × {n_runs}", type="primary", use_container_width=True,
+        )
+        base_btn = st.button(
+            f"Run Baseline × {n_runs}", use_container_width=True,
+        )
 
         if not use_mock and not os.getenv("OPENROUTER_API_KEY"):
             st.warning("OPENROUTER_API_KEY not set — will fall back to mock.")
+
+        st.divider()
+        n_farg_hist = len(st.session_state.get("farg_run_history", []))
+        n_base_hist = len(st.session_state.get("base_run_history", []))
+        st.caption(
+            f"History: **{n_farg_hist}** FARG run(s) · **{n_base_hist}** Baseline run(s)"
+        )
+        cc1, cc2 = st.columns(2)
+        clear_farg = cc1.button(
+            "Clear FARG", use_container_width=True,
+            help="Remove all accumulated FARG runs from history.",
+        )
+        clear_base = cc2.button(
+            "Clear Baseline", use_container_width=True,
+            help="Remove all accumulated Baseline runs from history.",
+        )
+        if clear_farg:
+            for k in ("farg_run_history", "mc", "paths", "farg_calls", "farg_scores"):
+                st.session_state.pop(k, None)
+            st.rerun()
+        if clear_base:
+            for k in ("base_run_history", "base_run"):
+                st.session_state.pop(k, None)
+            st.rerun()
 
         st.divider()
         st.markdown("**Legend**")
@@ -957,27 +1288,67 @@ def main() -> None:
     _use_mock = use_mock or not os.getenv("OPENROUTER_API_KEY")
 
     if run_btn:
-        with st.spinner("Running FARG simulation..."):
-            mc, paths, arch_calls, farg_scores = run_simulation(use_mock=_use_mock, max_ticks=max_ticks)
-        st.session_state["mc"] = mc
-        st.session_state["paths"] = paths
-        st.session_state["farg_calls"] = arch_calls
-        st.session_state["farg_scores"] = farg_scores
-        st.success(f"Done — {len(paths)} path(s) found in {len(mc.snapshots)} ticks.")
+        farg_history = list(st.session_state.get("farg_run_history", []))
+        prog = st.progress(0.0, text=f"FARG run 1 / {n_runs}…")
+        for i in range(n_runs):
+            prog.progress(
+                (i + 0.5) / n_runs,
+                text=f"FARG run {i + 1} / {n_runs}…",
+            )
+            _mc, _paths, _arch, _scores = run_simulation(
+                use_mock=_use_mock, max_ticks=max_ticks
+            )
+            farg_history.append({
+                "run_idx": len(farg_history) + 1,
+                "mc": _mc,
+                "paths": _paths,
+                "arch_calls": _arch,
+                "farg_scores": _scores,
+            })
+            prog.progress(
+                (i + 1.0) / n_runs,
+                text=f"FARG run {i + 1} / {n_runs} — {len(_paths)} path(s) found",
+            )
+        prog.empty()
+        st.session_state["farg_run_history"] = farg_history
+        last = farg_history[-1]
+        st.session_state["mc"] = last["mc"]
+        st.session_state["paths"] = last["paths"]
+        st.session_state["farg_calls"] = last["arch_calls"]
+        st.session_state["farg_scores"] = last["farg_scores"]
+        total_paths = sum(len(r["paths"]) for r in farg_history)
+        st.success(
+            f"FARG: {n_runs} run(s) added. "
+            f"History: {len(farg_history)} run(s), {total_paths} total paths."
+        )
 
     if base_btn:
         from baseline import run_baseline
         from slipnet import MockSlipnet, RealSlipnet, CountingSlipnet
-        with st.spinner("Running baseline pipeline..."):
+        base_history = list(st.session_state.get("base_run_history", []))
+        prog = st.progress(0.0, text=f"Baseline run 1 / {n_runs}…")
+        for i in range(n_runs):
+            prog.progress(
+                (i + 0.5) / n_runs,
+                text=f"Baseline run {i + 1} / {n_runs}…",
+            )
             inner = MockSlipnet() if _use_mock else RealSlipnet()
-            base_counting = CountingSlipnet(inner)   # caller owns the wrapper
-            base_run = run_baseline(base_counting, START, GOAL)
-            base_run.calls_by_type = dict(base_counting.calls)
-            base_run.llm_calls = base_counting.total
-        st.session_state["base_run"] = base_run
+            base_counting = CountingSlipnet(inner)
+            _base_run = run_baseline(base_counting, START, GOAL)
+            _base_run.calls_by_type = dict(base_counting.calls)
+            _base_run.llm_calls = base_counting.total
+            base_history.append(_base_run)
+            prog.progress(
+                (i + 1.0) / n_runs,
+                text=f"Baseline run {i + 1} / {n_runs} — {len(_base_run.paths)} path(s)",
+            )
+        prog.empty()
+        st.session_state["base_run_history"] = base_history
+        st.session_state["base_run"] = base_history[-1]
+        total_base_paths = sum(len(r.paths) for r in base_history)
         st.success(
-            f"Baseline done — {base_run.modes_complete}/{base_run.modes_tried} modes "
-            f"reached goal in {base_run.llm_calls} LLM calls."
+            f"Baseline: {n_runs} run(s) added. "
+            f"History: {len(base_history)} run(s), {total_base_paths} total paths."
         )
 
     mc: MetricsCollector | None = st.session_state.get("mc")
@@ -1069,9 +1440,9 @@ def main() -> None:
 
         c_depth, c_sankey = st.columns([2, 3])
         with c_depth:
-            st.plotly_chart(chart_exploration_depth(mc), use_container_width=True)
+            st.plotly_chart(chart_exploration_depth(tree), use_container_width=True)
         with c_sankey:
-            st.plotly_chart(chart_exploration_sankey(mc), use_container_width=True)
+            st.plotly_chart(chart_exploration_sankey(tree), use_container_width=True)
 
         # Per-first-stop breakdown table
         with st.expander("First-leg breakdown table"):
@@ -1115,6 +1486,13 @@ def main() -> None:
             st.info("Click **Run FARG Simulation** to add FARG paths to the comparison.")
         else:
             panel_farg_vs_baseline(paths, farg_scores, farg_calls, base_run)
+
+    # ── Row 7: Multi-run statistical analysis ────────────────────────────────
+    farg_history = st.session_state.get("farg_run_history", [])
+    base_history = st.session_state.get("base_run_history", [])
+    if farg_history or base_history:
+        st.divider()
+        panel_multi_run_stats(farg_history, base_history)
 
     # ── Raw data expander ─────────────────────────────────────────────────────
     with st.expander("Raw snapshot data (DataFrame)"):
