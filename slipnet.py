@@ -90,12 +90,20 @@ async def _async_query(prompt: str, temperature: float) -> Dict[str, Any]:
                     "model": MODEL_ID,
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": temperature,
+                    # Disable Qwen3 extended thinking so content is never null.
+                    "thinking": {"type": "disabled"},
                 },
             )
     elapsed = _time.monotonic() - t0
     log.debug("LLM response  status=%d elapsed=%.1fs", resp.status_code, elapsed)
     resp.raise_for_status()
-    raw = resp.json()["choices"][0]["message"]["content"]
+    msg = resp.json()["choices"][0]["message"]
+    raw = msg.get("content")
+    # Qwen3 thinking mode: content=null, answer inside reasoning_content.
+    if raw is None:
+        reasoning = msg.get("reasoning_content") or msg.get("reasoning") or ""
+        # The JSON answer follows </think> if present, else use full reasoning.
+        raw = reasoning.split("</think>")[-1].strip() if "</think>" in reasoning else reasoning.strip()
     log.debug("LLM raw content: %.200s", raw)
     return json.loads(raw)
 
