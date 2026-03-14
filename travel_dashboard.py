@@ -36,9 +36,6 @@ try:
 except ImportError:
     pass
 
-import threading
-import time as _time
-
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
@@ -76,11 +73,7 @@ STACKED_TYPES = [
 
 # ── Simulation runner ─────────────────────────────────────────────────────────
 
-def run_simulation(
-    use_mock: bool,
-    max_ticks: int,
-    tick_callback=None,
-) -> tuple[MetricsCollector, list]:
+def run_simulation(use_mock: bool, max_ticks: int) -> tuple[MetricsCollector, list]:
     from agents import Want
     from main_loop import run_loop
     from slipnet import MockSlipnet, RealSlipnet
@@ -90,7 +83,7 @@ def run_simulation(
     ws = Workspace()
     ws.add(Want(from_loc=START, to_loc=GOAL), init_a=1.0)
     mc = MetricsCollector()
-    paths = run_loop(ws, slipnet, logger=mc, max_ticks=max_ticks, tick_callback=tick_callback)
+    paths = run_loop(ws, slipnet, logger=mc, max_ticks=max_ticks)
     return mc, paths
 
 
@@ -471,65 +464,14 @@ def main() -> None:
 
     # ── Run / load state ──────────────────────────────────────────────────────
     if run_btn:
-        # Run the simulation in a background thread so Streamlit's render loop
-        # is never blocked by a long LLM call.  The main thread polls a shared
-        # dict every 0.3 s and updates the progress bar independently.
-        _shared: dict = {
-            "tick": -1, "max_t": max_ticks, "n_complete": 0,
-            "agent": "starting…", "done": False,
-            "result": None, "error": None,
-        }
-
-        def _simulation_thread() -> None:
-            def _cb(tick: int, max_t: int, n: int, agent: str) -> None:
-                _shared["tick"] = tick
-                _shared["n_complete"] = n
-                _shared["agent"] = agent
-            try:
-                mc, paths = run_simulation(
-                    use_mock=use_mock or not os.getenv("OPENROUTER_API_KEY"),
-                    max_ticks=max_ticks,
-                    tick_callback=_cb,
-                )
-                _shared["result"] = (mc, paths)
-            except Exception as exc:
-                _shared["error"] = str(exc)
-            finally:
-                _shared["done"] = True
-
-        _thread = threading.Thread(target=_simulation_thread, daemon=True)
-        _thread.start()
-
-        _status_box = st.empty()
-        _progress_bar = st.progress(0)
-        _t0 = _time.monotonic()
-
-        while not _shared["done"]:
-            elapsed = int(_time.monotonic() - _t0)
-            tick = _shared["tick"]
-            if tick >= 0:
-                _progress_bar.progress(min(1.0, (tick + 1) / max_ticks))
-                _status_box.info(
-                    f"Tick **{tick + 1} / {max_ticks}** — "
-                    f"paths found: **{_shared['n_complete']}** — "
-                    f"running `{_shared['agent']}` — "
-                    f"**{elapsed}s** elapsed"
-                )
-            else:
-                _status_box.info(f"Initialising… ({elapsed}s)")
-            _time.sleep(0.3)
-
-        _thread.join(timeout=5)
-        _progress_bar.empty()
-        _status_box.empty()
-
-        if _shared["error"]:
-            st.error(f"Simulation failed: {_shared['error']}")
-        elif _shared["result"]:
-            mc, paths = _shared["result"]
-            st.session_state["mc"] = mc
-            st.session_state["paths"] = paths
-            st.success(f"Done — {len(paths)} path(s) found in {len(mc.snapshots)} ticks.")
+        with st.spinner("Running simulation… (check terminal for per-tick progress)"):
+            mc, paths = run_simulation(
+                use_mock=use_mock or not os.getenv("OPENROUTER_API_KEY"),
+                max_ticks=max_ticks,
+            )
+        st.session_state["mc"] = mc
+        st.session_state["paths"] = paths
+        st.success(f"Done — {len(paths)} path(s) found in {len(mc.snapshots)} ticks.")
 
     mc: MetricsCollector | None = st.session_state.get("mc")
     paths: list = st.session_state.get("paths", [])

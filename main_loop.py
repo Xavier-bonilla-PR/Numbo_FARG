@@ -152,24 +152,17 @@ def run_loop(
     slipnet,
     logger=None,
     max_ticks: int = MAX_TICKS,
-    tick_callback=None,
 ) -> List[PathComplete]:
     """Run the stochastic heartbeat.
 
-    tick_callback(tick, max_ticks, n_complete, chosen_label) is called once
-    per tick so callers (e.g. the Streamlit dashboard) can display live progress
-    without having to poll or thread.
+    Per-tick progress is written to the log at INFO level so it is visible
+    in the terminal where the dashboard was launched.
 
     Returns a list of GoalReached tags (one per discovered canvas chain).
     """
     complete: List[PathComplete] = []
 
     for tick in range(max_ticks):
-
-        # ── Fire callback immediately so the UI shows the current tick number
-        #    BEFORE any potentially slow LLM call this tick makes.
-        if tick_callback:
-            tick_callback(tick, max_ticks, len(complete), "…")
 
         # ── 1. Decay ──────────────────────────────────────────────────────
         ws.decay_all()
@@ -184,8 +177,6 @@ def run_loop(
         complete = get_complete_paths(ws)
         if len(complete) >= MIN_COMPLETE_PATHS:
             log.info("Tick %d: found %d paths, stopping.", tick, len(complete))
-            if tick_callback:
-                tick_callback(tick, max_ticks, len(complete), "DONE")
             break
 
         # ── 5. Collect eligible agents ────────────────────────────────────
@@ -202,15 +193,12 @@ def run_loop(
         if chosen is None:
             continue
 
-        # ── 7. Announce agent BEFORE the blocking call ────────────────────
-        chosen_label = type(chosen).__name__
+        # ── 7. Log before the agent runs (visible before any LLM wait) ───────
         log.info(
             "Tick %3d/%d  elems=%d  canvas=%d  paths=%d  agent=%s",
             tick, max_ticks, len(ws.elements), len(ws.canvas),
-            len(complete), chosen_label,
+            len(complete), type(chosen).__name__,
         )
-        if tick_callback:
-            tick_callback(tick, max_ticks, len(complete), chosen_label)
 
         # ── 8. go() or act()? ─────────────────────────────────────────────
         # Early ticks strongly prefer go() to build up a rich ImCell population.
@@ -238,7 +226,7 @@ def run_loop(
         if logger:
             logger.log_tick(tick, ws, chosen=chosen, complete=complete)
 
-        # ── 9. Prune ──────────────────────────────────────────────────────
+        # ── 10. Prune ─────────────────────────────────────────────────────
         ws.prune()
 
     # Final pass
