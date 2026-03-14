@@ -43,6 +43,7 @@ import streamlit as st
 import networkx as nx
 import numpy as np
 
+from baseline import BaselinePipeline, BaselineResult, compute_metrics
 from config import GOAL, MAX_TICKS, MIN_COMPLETE_PATHS, START
 from metrics import MetricsCollector
 
@@ -419,6 +420,136 @@ def panel_path_comparison(paths: list) -> None:
             st.code(route_str, language=None)
 
 
+# ── Baseline runner ───────────────────────────────────────────────────────────
+
+def run_baseline_pipeline(use_mock: bool) -> BaselineResult:
+    from slipnet import MockSlipnet, RealSlipnet
+    slipnet = MockSlipnet() if use_mock else RealSlipnet()
+    pipeline = BaselinePipeline(slipnet)
+    return pipeline.run()
+
+
+# ── Comparison panel ──────────────────────────────────────────────────────────
+
+def panel_farg_vs_baseline(mc: MetricsCollector, farg_paths: list, br: BaselineResult) -> None:
+    """Side-by-side FARG vs Baseline comparison across every measurable axis."""
+    import statistics
+    from collections import Counter
+
+    # ── Compute FARG metrics ───────────────────────────────────────────────────
+    total_p, surv_p, comm_p = mc.survival_funnel()
+    farg_complete = [pc for pc in farg_paths]
+    farg_stops = set()
+    farg_leg_keys = []
+    farg_scores = []
+    for pc in farg_complete:
+        ic = pc.taggee
+        for leg in ic.legs:
+            if leg.to_loc != GOAL:
+                farg_stops.add(leg.to_loc)
+            farg_leg_keys.append(f"{leg.from_loc}->{leg.to_loc}")
+    farg_leg_counts = Counter(farg_leg_keys)
+    farg_shared = sum(1 for c in farg_leg_counts.values() if c > 1)
+
+    # ── Compute baseline metrics ───────────────────────────────────────────────
+    bm = compute_metrics(br)
+    bl_complete = [p for p in br.paths if p.complete]
+    bl_scores = [p.score for p in bl_complete]
+
+    # ── Metric table ──────────────────────────────────────────────────────────
+    st.subheader("Head-to-Head Metrics")
+    metrics_rows = [
+        ("Complete paths found",       len(farg_complete),              bm["n_paths_complete"],
+         "More paths = richer solution space"),
+        ("Unique intermediate stops",  len(farg_stops),                 bm["n_unique_intermediate"],
+         "Higher = more geographic diversity"),
+        ("Shared legs (homogeneity)",  farg_shared,                     bm["shared_legs"],
+         "Lower = paths are more distinct (antipathy working)"),
+        ("Mean quality score",         round(statistics.mean([0.5]*max(1,len(farg_complete))), 3),
+                                                                         bm["mean_score"],
+         "Higher = better average route quality"),
+        ("Score std-dev",              "n/a",                           round(bm["score_stdev"], 3),
+         "FARG score spread driven by SeekEvidence competition"),
+        ("LLM calls (total)",          total_p + 1,                     bm["total_llm_calls"],
+         "FARG overhead vs baseline linearity"),
+        ("Legs proposed (LLM output)", total_p,                         sum(len(p.legs) for p in bl_complete),
+         "FARG explores more candidates before committing"),
+        ("Survival rate (10 ticks)",   f"{100*surv_p//max(1,total_p)}%", "100% (no decay)",
+         "Baseline never discards — FARG prunes via activation decay"),
+        ("Canvas commit rate",         f"{100*comm_p//max(1,total_p)}%", "100% (all kept)",
+         "FARG commits only winning legs; baseline commits everything"),
+    ]
+
+    col_h1, col_h2, col_h3, col_h4 = st.columns([2.5, 1.2, 1.2, 3])
+    col_h1.markdown("**Metric**")
+    col_h2.markdown("**FARG**")
+    col_h3.markdown("**Baseline**")
+    col_h4.markdown("**What it means**")
+    st.divider()
+    for label, farg_val, bl_val, note in metrics_rows:
+        c1, c2, c3, c4 = st.columns([2.5, 1.2, 1.2, 3])
+        c1.write(label)
+        c2.write(str(farg_val))
+        c3.write(str(bl_val))
+        c4.caption(note)
+
+    st.divider()
+
+    # ── Bar chart: unique stops ────────────────────────────────────────────────
+    st.subheader("Intermediate Stop Diversity")
+    bl_stops = set(bm["unique_stops"])
+    only_farg = sorted(farg_stops - bl_stops)
+    only_bl   = sorted(bl_stops - farg_stops)
+    shared    = sorted(farg_stops & bl_stops)
+
+    stop_fig = go.Figure()
+    if shared:
+        stop_fig.add_trace(go.Bar(name="Both", x=shared,
+                                   y=[1]*len(shared), marker_color="#2ca02c"))
+    if only_farg:
+        stop_fig.add_trace(go.Bar(name="FARG only", x=only_farg,
+                                   y=[1]*len(only_farg), marker_color="#1f77b4"))
+    if only_bl:
+        stop_fig.add_trace(go.Bar(name="Baseline only", x=only_bl,
+                                   y=[1]*len(only_bl), marker_color="#ff7f0e"))
+    stop_fig.update_layout(
+        barmode="group", height=260,
+        xaxis_title="City", yaxis=dict(showticklabels=False),
+        title="Which intermediate cities each system discovered",
+    )
+    st.plotly_chart(stop_fig, use_container_width=True)
+
+    # ── Score bar chart ────────────────────────────────────────────────────────
+    if bl_scores:
+        st.subheader("Path Quality Scores (Baseline)")
+        score_fig = go.Figure(go.Bar(
+            x=[p.mode for p in bl_complete],
+            y=[p.score for p in bl_complete],
+            marker_color=[TYPE_COLORS.get("SuggestMode", "#1f77b4")] * len(bl_complete),
+            text=[f"{p.score:.2f}" for p in bl_complete],
+            textposition="outside",
+        ))
+        score_fig.add_hline(y=0.35, line_dash="dash", line_color="red",
+                             annotation_text="FARG feasibility gate (0.35)")
+        score_fig.update_layout(
+            title="Baseline route scores (all paths accepted regardless of score)",
+            xaxis_title="Mode", yaxis_title="evaluate_path() score",
+            yaxis=dict(range=[0, 1.1]), height=300,
+        )
+        st.plotly_chart(score_fig, use_container_width=True)
+
+    # ── Baseline paths ────────────────────────────────────────────────────────
+    st.subheader("Baseline Complete Paths")
+    bl_sorted = sorted(bl_complete, key=lambda p: -p.score)
+    cols = st.columns(min(len(bl_sorted), 3))
+    for i, p in enumerate(bl_sorted):
+        with cols[i % len(cols)]:
+            st.markdown(f"**[{p.mode}]** score={p.score:.2f}  {p.total_hours:.1f}h")
+            st.code(p.route_str(), language=None)
+            for leg in p.legs:
+                st.caption(f"{leg.from_loc} --[{leg.mode}]--> {leg.to_loc} ({leg.duration_hours:.1f}h)")
+
+
 # ── Main Streamlit app ────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -436,7 +567,8 @@ def main() -> None:
         use_mock = st.toggle("Use MockSlipnet (no API calls)", value=True)
         max_ticks = st.slider("Max ticks", 20, 200, MAX_TICKS, step=10)
         top_n = st.slider("Activation timeline: top-N elements", 5, 40, 15, step=5)
-        run_btn = st.button("Run Simulation", type="primary", use_container_width=True)
+        run_btn = st.button("Run FARG", type="primary", use_container_width=True)
+        run_bl  = st.button("Run Baseline", use_container_width=True)
 
         if not use_mock and not os.getenv("OPENROUTER_API_KEY"):
             st.warning("OPENROUTER_API_KEY not set — will fall back to mock.")
@@ -451,86 +583,112 @@ def main() -> None:
                 )
 
     # ── Run / load state ──────────────────────────────────────────────────────
+    _use_mock = use_mock or not os.getenv("OPENROUTER_API_KEY")
+
     if run_btn:
-        with st.spinner("Running simulation..."):
-            mc, paths = run_simulation(
-                use_mock=use_mock or not os.getenv("OPENROUTER_API_KEY"),
-                max_ticks=max_ticks,
-            )
+        with st.spinner("Running FARG simulation..."):
+            mc, paths = run_simulation(use_mock=_use_mock, max_ticks=max_ticks)
         st.session_state["mc"] = mc
         st.session_state["paths"] = paths
-        st.success(f"Done — {len(paths)} path(s) found in {len(mc.snapshots)} ticks.")
+        st.success(f"FARG done — {len(paths)} path(s) in {len(mc.snapshots)} ticks.")
+
+    if run_bl:
+        with st.spinner("Running baseline pipeline..."):
+            br = run_baseline_pipeline(use_mock=_use_mock)
+        st.session_state["baseline"] = br
+        bm = compute_metrics(br)
+        st.success(f"Baseline done — {bm['n_paths_complete']} paths, "
+                   f"{bm['total_llm_calls']} LLM calls.")
 
     mc: MetricsCollector | None = st.session_state.get("mc")
     paths: list = st.session_state.get("paths", [])
+    br: BaselineResult | None = st.session_state.get("baseline")
 
-    if mc is None:
-        st.info("Configure and click **Run Simulation** to begin.")
+    if mc is None and br is None:
+        st.info("Click **Run FARG** and/or **Run Baseline** to begin.")
         return
 
-    ticks_available = len(mc.snapshots)
+    # ── Tabs ──────────────────────────────────────────────────────────────────
+    tab_labels = []
+    if mc is not None:
+        tab_labels.append("FARG Dashboard")
+    if br is not None:
+        tab_labels.append("FARG vs Baseline")
+    tabs = st.tabs(tab_labels)
+    tab_iter = iter(tabs)
 
-    # ── KPI strip ─────────────────────────────────────────────────────────────
-    total_p, surv_p, comm_p = mc.survival_funnel()
-    k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric("Ticks run", ticks_available)
-    k2.metric("Paths found", len(paths))
-    k3.metric("LLM legs proposed", total_p)
-    k4.metric("Survived 10 ticks", surv_p, f"{100*surv_p//max(1,total_p)}%")
-    k5.metric("Committed to canvas", comm_p, f"{100*comm_p//max(1,total_p)}%")
+    # ── FARG tab ──────────────────────────────────────────────────────────────
+    if mc is not None:
+        with next(tab_iter):
+            ticks_available = len(mc.snapshots)
+            total_p, surv_p, comm_p = mc.survival_funnel()
+            k1, k2, k3, k4, k5 = st.columns(5)
+            k1.metric("Ticks run", ticks_available)
+            k2.metric("Paths found", len(paths))
+            k3.metric("LLM legs proposed", total_p)
+            k4.metric("Survived 10 ticks", surv_p, f"{100*surv_p//max(1,total_p)}%")
+            k5.metric("Committed to canvas", comm_p, f"{100*comm_p//max(1,total_p)}%")
 
-    st.divider()
+            st.divider()
+            c1, c2 = st.columns([3, 2])
+            with c1:
+                st.plotly_chart(chart_activation_timeline(mc, top_n), use_container_width=True)
+            with c2:
+                st.plotly_chart(chart_workspace_composition(mc), use_container_width=True)
 
-    # ── Row 1: Activation + Composition ───────────────────────────────────────
-    c1, c2 = st.columns([3, 2])
-    with c1:
-        st.plotly_chart(chart_activation_timeline(mc, top_n), use_container_width=True)
-    with c2:
-        st.plotly_chart(chart_workspace_composition(mc), use_container_width=True)
+            c3, c4 = st.columns(2)
+            with c3:
+                st.plotly_chart(chart_act_probability(mc), use_container_width=True)
+            with c4:
+                st.plotly_chart(chart_temperature(mc), use_container_width=True)
 
-    # ── Row 2: Act Probability + Temperature ──────────────────────────────────
-    c3, c4 = st.columns(2)
-    with c3:
-        st.plotly_chart(chart_act_probability(mc), use_container_width=True)
-    with c4:
-        st.plotly_chart(chart_temperature(mc), use_container_width=True)
+            st.subheader("Competition Graph (Network Topology)")
+            tick_idx = st.slider(
+                "Select tick to visualise",
+                0, ticks_available - 1,
+                min(ticks_available - 1, 20),
+                key="graph_tick",
+            )
+            st.plotly_chart(chart_competition_graph(mc, tick_idx), use_container_width=True)
 
-    # ── Row 3: Competition Graph ───────────────────────────────────────────────
-    st.subheader("Competition Graph (Network Topology)")
-    tick_idx = st.slider(
-        "Select tick to visualise",
-        0, ticks_available - 1,
-        min(ticks_available - 1, 20),
-        key="graph_tick",
-    )
-    st.plotly_chart(chart_competition_graph(mc, tick_idx), use_container_width=True)
+            c5, c6 = st.columns([2, 3])
+            with c5:
+                st.plotly_chart(chart_perturbation_funnel(mc), use_container_width=True)
+            with c6:
+                st.plotly_chart(chart_pending_llm(mc), use_container_width=True)
 
-    # ── Row 4: Funnel + Async Bottleneck ──────────────────────────────────────
-    c5, c6 = st.columns([2, 3])
-    with c5:
-        st.plotly_chart(chart_perturbation_funnel(mc), use_container_width=True)
-    with c6:
-        st.plotly_chart(chart_pending_llm(mc), use_container_width=True)
+            st.divider()
+            st.subheader("FARG Complete Paths")
+            panel_path_comparison(paths)
 
-    # ── Row 5: Path Comparison ────────────────────────────────────────────────
-    st.divider()
-    st.subheader("Path Comparison Panel")
-    panel_path_comparison(paths)
+            with st.expander("Raw snapshot data (DataFrame)"):
+                rows = []
+                for s in mc.snapshots:
+                    rows.append({
+                        "tick": s.tick,
+                        "act_prob": round(s.act_prob, 4),
+                        "pending_llm": s.pending_llm,
+                        "canvas_total": s.canvas_total,
+                        "complete": s.complete_count,
+                        "chosen_type": s.chosen_type or "",
+                        **{t: s.type_counts.get(t, 0) for t in STACKED_TYPES},
+                    })
+                st.dataframe(pd.DataFrame(rows), use_container_width=True)
 
-    # ── Raw data expander ─────────────────────────────────────────────────────
-    with st.expander("Raw snapshot data (DataFrame)"):
-        rows = []
-        for s in mc.snapshots:
-            rows.append({
-                "tick": s.tick,
-                "act_prob": round(s.act_prob, 4),
-                "pending_llm": s.pending_llm,
-                "canvas_total": s.canvas_total,
-                "complete": s.complete_count,
-                "chosen_type": s.chosen_type or "",
-                **{t: s.type_counts.get(t, 0) for t in STACKED_TYPES},
-            })
-        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+    # ── Comparison tab ────────────────────────────────────────────────────────
+    if br is not None:
+        with next(tab_iter):
+            if mc is None:
+                st.info("Run FARG first to enable the full head-to-head comparison.")
+                st.subheader("Baseline paths only")
+                bl_sorted = sorted([p for p in br.paths if p.complete], key=lambda p: -p.score)
+                cols = st.columns(min(len(bl_sorted), 3))
+                for i, p in enumerate(bl_sorted):
+                    with cols[i % len(cols)]:
+                        st.markdown(f"**[{p.mode}]** score={p.score:.2f}")
+                        st.code(p.route_str(), language=None)
+            else:
+                panel_farg_vs_baseline(mc, paths, br)
 
 
 if __name__ == "__main__":
