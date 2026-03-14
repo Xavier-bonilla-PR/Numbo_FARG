@@ -147,10 +147,20 @@ def get_complete_paths(ws) -> List[GoalReached]:
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
-def run_loop(ws, slipnet, logger=None, max_ticks: int = MAX_TICKS) -> List[PathComplete]:
+def run_loop(
+    ws,
+    slipnet,
+    logger=None,
+    max_ticks: int = MAX_TICKS,
+    tick_callback=None,
+) -> List[PathComplete]:
     """Run the stochastic heartbeat.
 
-    Returns a list of PathComplete tags (one per discovered path).
+    tick_callback(tick, max_ticks, n_complete, chosen_label) is called once
+    per tick so callers (e.g. the Streamlit dashboard) can display live progress
+    without having to poll or thread.
+
+    Returns a list of GoalReached tags (one per discovered canvas chain).
     """
     complete: List[PathComplete] = []
 
@@ -169,6 +179,8 @@ def run_loop(ws, slipnet, logger=None, max_ticks: int = MAX_TICKS) -> List[PathC
         complete = get_complete_paths(ws)
         if len(complete) >= MIN_COMPLETE_PATHS:
             log.info("Tick %d: found %d paths, stopping.", tick, len(complete))
+            if tick_callback:
+                tick_callback(tick, max_ticks, len(complete), "DONE")
             break
 
         # ── 5. Collect eligible agents ────────────────────────────────────
@@ -177,6 +189,8 @@ def run_loop(ws, slipnet, logger=None, max_ticks: int = MAX_TICKS) -> List[PathC
             log.debug("Tick %d: no eligible agents.", tick)
             if logger:
                 logger.log_tick(tick, ws, chosen=None, complete=complete)
+            if tick_callback:
+                tick_callback(tick, max_ticks, len(complete), "—")
             ws.prune()
             continue
 
@@ -207,7 +221,15 @@ def run_loop(ws, slipnet, logger=None, max_ticks: int = MAX_TICKS) -> List[PathC
             except Exception as exc:
                 log.warning("agent.go() error: %s – %s", chosen, exc)
 
-        # ── 8. Log ────────────────────────────────────────────────────────
+        # ── 8. Log / progress callback ────────────────────────────────────
+        chosen_label = type(chosen).__name__ if chosen else "—"
+        log.info(
+            "Tick %3d/%d  elems=%d  canvas=%d  paths=%d  agent=%s",
+            tick, max_ticks, len(ws.elements), len(ws.canvas),
+            len(complete), chosen_label,
+        )
+        if tick_callback:
+            tick_callback(tick, max_ticks, len(complete), chosen_label)
         if logger:
             logger.log_tick(tick, ws, chosen=chosen, complete=complete)
 

@@ -73,7 +73,11 @@ STACKED_TYPES = [
 
 # ── Simulation runner ─────────────────────────────────────────────────────────
 
-def run_simulation(use_mock: bool, max_ticks: int) -> tuple[MetricsCollector, list]:
+def run_simulation(
+    use_mock: bool,
+    max_ticks: int,
+    tick_callback=None,
+) -> tuple[MetricsCollector, list]:
     from agents import Want
     from main_loop import run_loop
     from slipnet import MockSlipnet, RealSlipnet
@@ -83,7 +87,7 @@ def run_simulation(use_mock: bool, max_ticks: int) -> tuple[MetricsCollector, li
     ws = Workspace()
     ws.add(Want(from_loc=START, to_loc=GOAL), init_a=1.0)
     mc = MetricsCollector()
-    paths = run_loop(ws, slipnet, logger=mc, max_ticks=max_ticks)
+    paths = run_loop(ws, slipnet, logger=mc, max_ticks=max_ticks, tick_callback=tick_callback)
     return mc, paths
 
 
@@ -464,11 +468,25 @@ def main() -> None:
 
     # ── Run / load state ──────────────────────────────────────────────────────
     if run_btn:
-        with st.spinner("Running simulation..."):
-            mc, paths = run_simulation(
-                use_mock=use_mock or not os.getenv("OPENROUTER_API_KEY"),
-                max_ticks=max_ticks,
+        _status = st.empty()
+        _progress = st.progress(0)
+
+        def _tick_cb(tick: int, max_t: int, n_complete: int, agent: str) -> None:
+            pct = min(1.0, (tick + 1) / max_t)
+            _progress.progress(pct)
+            _status.info(
+                f"Tick **{tick + 1} / {max_t}** — "
+                f"paths found: **{n_complete}** — "
+                f"last agent: `{agent}`"
             )
+
+        mc, paths = run_simulation(
+            use_mock=use_mock or not os.getenv("OPENROUTER_API_KEY"),
+            max_ticks=max_ticks,
+            tick_callback=_tick_cb,
+        )
+        _progress.empty()
+        _status.empty()
         st.session_state["mc"] = mc
         st.session_state["paths"] = paths
         st.success(f"Done — {len(paths)} path(s) found in {len(mc.snapshots)} ticks.")
