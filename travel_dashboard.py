@@ -96,7 +96,9 @@ def run_simulation(use_mock: bool, max_ticks: int):
     for pc in paths:
         pid  = pc.path_id if isinstance(pc, GoalReached) else pc.taggee.path_id
         legs = pc.legs    if isinstance(pc, GoalReached) else pc.taggee.legs
-        farg_scores[pid] = counting.evaluate_path(f"farg-{pid}", legs, activation=0.5)
+        score = counting.evaluate_path(f"farg-{pid}", legs, activation=0.5)
+        if score is not None:
+            farg_scores[pid] = score
 
     return mc, paths, arch_calls, farg_scores
 

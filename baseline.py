@@ -133,6 +133,9 @@ def run_baseline(
         score = slipnet.evaluate_path(
             f"baseline-{mode}", tuple(legs), activation=0.5
         )
+        if score is None:
+            log.warning("Baseline [%s]: evaluate_path returned None; skipping path", mode)
+            continue
 
         path_locs = (start,) + tuple(l.to_loc for l in legs)
         result = BaselineResult(

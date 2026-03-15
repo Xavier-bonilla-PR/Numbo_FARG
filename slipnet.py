@@ -261,7 +261,8 @@ class RealSlipnet:
         path_id: str,
         legs: Any,
         activation: float = 0.5,
-    ) -> float:
+        max_retries: int = 3,
+    ) -> float | None:
         legs_list = list(legs)
         temp = temperature_for_activation(activation, depth=len(legs_list))
         legs_desc = " → ".join(f"{l.from_loc}→{l.to_loc}({l.mode})" for l in legs_list)
@@ -272,12 +273,17 @@ class RealSlipnet:
             f"scenic value, cultural richness, and practical feasibility: {legs_desc}. "
             f'Format: {{"score": 0.75, "reason": "..."}}'
         )
-        try:
-            result = _run_async(_async_query(prompt, temp))
-            return float(result.get("score") or 0.5)
-        except Exception as exc:
-            log.warning("evaluate_path failed: %s", exc)
-        return 0.5
+        for attempt in range(1, max_retries + 1):
+            try:
+                result = _run_async(_async_query(prompt, temp))
+                raw = result.get("score")
+                if raw is not None:
+                    return float(raw)
+                log.warning("evaluate_path got null score (attempt %d/%d)", attempt, max_retries)
+            except Exception as exc:
+                log.warning("evaluate_path failed (attempt %d/%d): %s", attempt, max_retries, exc)
+        log.error("evaluate_path gave up after %d attempts for %s", max_retries, path_id)
+        return None
 
     def compare_paths(
         self,
@@ -498,7 +504,7 @@ class CountingSlipnet:
         path_id: str,
         legs: Any,
         activation: float = 0.5,
-    ) -> float:
+    ) -> float | None:
         self.calls["evaluate_path"] += 1
         return self._inner.evaluate_path(path_id, legs, activation=activation)
 

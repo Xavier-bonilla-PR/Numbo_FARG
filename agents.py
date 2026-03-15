@@ -392,6 +392,9 @@ class SeekEvidence:
         score = slipnet.evaluate_path(
             self.path_id, self.imcell.legs, activation
         )
+        if score is None:
+            log.warning("evaluate_path returned None for %s; skipping GettingCloser tag", self.path_id)
+            return
         weight = max(0.0, min(1.0, float(score)))
 
         # Chain coherence accumulation: blend this leg's score with the
