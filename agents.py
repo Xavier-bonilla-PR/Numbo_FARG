@@ -135,6 +135,7 @@ class SuggestMode:
         leg_data = slipnet.query_route(
             self.current_loc, self.goal, self.mode, activation,
             visited_locs=visited,
+            depth=len(canvas_cells),
         )
 
         ws.untag(self, PendingLLM)
@@ -148,7 +149,7 @@ class SuggestMode:
                 from_loc=str(leg_data["from_loc"]),
                 to_loc=str(leg_data["to_loc"]),
                 mode=str(leg_data.get("mode", self.mode)),
-                duration_hours=float(leg_data.get("duration_hours", 0.0)),
+                duration_hours=float(leg_data.get("duration_hours") or 0.0),
                 notes=str(leg_data.get("notes", "")),
             )
         except (KeyError, TypeError, ValueError) as exc:
@@ -327,7 +328,19 @@ class SuggestRoute:
         ws.tag(ActIsDone(taggee=self))
         ws.downboost(self)
 
-        if self.proposed_leg.to_loc != self.goal:
+        if self.proposed_leg.to_loc == self.goal:
+            # Declare this canvas chain complete — one GoalReached tag per chain,
+            # so all paths reaching the goal are captured (no single-halt stop).
+            from tags import GoalReached
+            canvas_cells = sorted(ws.canvas_legs(self.path_id), key=lambda c: c.position)
+            chain_legs = tuple(c.leg for c in canvas_cells)
+            path_locs = (canvas_cells[0].leg.from_loc,) + tuple(c.leg.to_loc for c in canvas_cells)
+            ws.tag(GoalReached(path_id=self.path_id, path=path_locs, legs=chain_legs))
+            log.info(
+                "GoalReached: %s  %s",
+                self.path_id, " -> ".join(path_locs),
+            )
+        else:
             next_sm = SuggestMode(
                 path_id=self.path_id,
                 current_loc=self.proposed_leg.to_loc,
@@ -379,10 +392,35 @@ class SeekEvidence:
         score = slipnet.evaluate_path(
             self.path_id, self.imcell.legs, activation
         )
+        if score is None:
+            log.warning("evaluate_path returned None for %s; skipping GettingCloser tag", self.path_id)
+            return
         weight = max(0.0, min(1.0, float(score)))
 
+        # Chain coherence accumulation: blend this leg's score with the
+        # predecessor ImCell's GettingCloser score so the weight compounds
+        # across legs rather than resetting per ImCell.  This stabilises
+        # act_prob and prevents shallow chains from extending indefinitely
+        # on lucky high single-leg scores.
+        if len(self.imcell.legs) > 1:
+            pred_leg_count = len(self.imcell.legs) - 1
+            pred_score = None
+            for t in ws.tags:
+                if (
+                    isinstance(t, GettingCloser)
+                    and isinstance(t.taggee, ImCell)
+                    and t.taggee.path_id == self.path_id
+                    and len(t.taggee.legs) == pred_leg_count
+                ):
+                    pred_score = t.weight
+                    break
+            if pred_score is not None:
+                # 60 % own evaluation + 40 % predecessor's accumulated score
+                weight = 0.6 * weight + 0.4 * pred_score
+
         log.debug(
-            "SeekEvidence.go: path=%s score=%.3f", self.path_id, weight
+            "SeekEvidence.go: path=%s score=%.3f (legs=%d)",
+            self.path_id, weight, len(self.imcell.legs),
         )
 
         ws.tag(GettingCloser(taggee=self.imcell, weight=weight))

@@ -21,6 +21,19 @@ from typing import Any, Dict, List, Optional, Tuple
 # ── Data classes ──────────────────────────────────────────────────────────────
 
 @dataclass
+class ImCellBirthRecord:
+    """Records an ImCell the first time it is observed in the workspace.
+
+    depth = len(legs): how far along the exploration tree this cell sits.
+    legs is a snapshot of the Leg tuple at birth (immutable CanvasCell-free).
+    """
+    birth_tick: int
+    path_id: str
+    depth: int          # len(legs) — 1 = first leg explored, 2 = second, …
+    legs: tuple         # snapshot of (Leg, …) at birth
+
+
+@dataclass
 class LLMLegRecord:
     """Tracks a single LLM-proposed leg from birth through to canvas commit."""
     birth_tick: int
@@ -68,7 +81,9 @@ class MetricsCollector:
     def __init__(self) -> None:
         self.snapshots: List[TickSnapshot] = []
         self.llm_legs: List[LLMLegRecord] = []
+        self.imcell_births: List[ImCellBirthRecord] = []
         self._seen_suggest_routes: set = set()
+        self._seen_imcells: set = set()   # id(imcell) → avoid double-recording
         self._canvas_prev: int = 0
 
     # ── Element introspection helpers ─────────────────────────────────────────
@@ -77,7 +92,7 @@ class MetricsCollector:
     def _elem_type(elem: Any) -> str:
         from agents import Want, SuggestMode, SuggestRoute, SeekEvidence, Evaluate
         from canvas import ImCell
-        from tags import PendingLLM, Blocked, GettingCloser, PathComplete, GoIsDone, ActIsDone
+        from tags import PendingLLM, Blocked, GettingCloser, GoalReached, PathComplete, GoIsDone, ActIsDone
         if isinstance(elem, Want):           return "Want"
         if isinstance(elem, SuggestMode):   return "SuggestMode"
         if isinstance(elem, SuggestRoute):  return "SuggestRoute"
@@ -87,6 +102,7 @@ class MetricsCollector:
         if isinstance(elem, PendingLLM):    return "PendingLLM"
         if isinstance(elem, Blocked):       return "Blocked"
         if isinstance(elem, GettingCloser): return "GettingCloser"
+        if isinstance(elem, GoalReached):   return "GoalReached"
         if isinstance(elem, PathComplete):  return "PathComplete"
         if isinstance(elem, GoIsDone):      return "GoIsDone"
         if isinstance(elem, ActIsDone):     return "ActIsDone"
@@ -154,6 +170,18 @@ class MetricsCollector:
                         break
             self._canvas_prev = canvas_now
 
+        # ── 3b. Track ImCell births ────────────────────────────────────────────
+        from canvas import ImCell as _ImCell
+        for elem in ws.elements:
+            if isinstance(elem, _ImCell) and id(elem) not in self._seen_imcells:
+                self._seen_imcells.add(id(elem))
+                self.imcell_births.append(ImCellBirthRecord(
+                    birth_tick=tick,
+                    path_id=elem.path_id,
+                    depth=len(elem.legs),
+                    legs=elem.legs,
+                ))
+
         # ── 4. Activations snapshot ────────────────────────────────────────────
         activations: Dict[str, Tuple[str, float]] = {}
         type_counts: Dict[str, int] = {}
@@ -203,6 +231,50 @@ class MetricsCollector:
         survived = sum(1 for r in self.llm_legs if r.alive_at_10 is True)
         committed = sum(1 for r in self.llm_legs if r.committed)
         return total, survived, committed
+
+    def exploration_tree(self) -> dict:
+        """Return structured ImCell lineage data suitable for tree charts.
+
+        Returns::
+
+            {
+              "births":       [ImCellBirthRecord, …],
+              "depth_counts": {1: N, 2: M, …},   # ImCells born at each depth
+              "transitions":  {(from_city, to_city, depth): count, …},
+              "first_stop_counts": {"Nha Trang": 3, …},
+            }
+
+        Transitions encode the exploration tree edges:
+          - depth=1 edge: legs[0].from_loc → legs[0].to_loc
+          - depth=D edge: legs[D-2].to_loc → legs[D-1].to_loc
+        """
+        depth_counts: dict = {}
+        transitions: dict = {}
+        first_stop_counts: dict = {}
+
+        for rec in self.imcell_births:
+            depth_counts[rec.depth] = depth_counts.get(rec.depth, 0) + 1
+
+            # Which direction did this path start in?
+            if rec.depth >= 1:
+                first = rec.legs[0].to_loc
+                first_stop_counts[first] = first_stop_counts.get(first, 0) + 1
+
+            # Edge leading INTO this ImCell
+            if rec.depth == 1:
+                from_city = rec.legs[0].from_loc
+            else:
+                from_city = rec.legs[-2].to_loc
+            to_city = rec.legs[-1].to_loc
+            key = (from_city, to_city, rec.depth)
+            transitions[key] = transitions.get(key, 0) + 1
+
+        return {
+            "births":            self.imcell_births,
+            "depth_counts":      depth_counts,
+            "transitions":       transitions,
+            "first_stop_counts": first_stop_counts,
+        }
 
     def temperature_series(self) -> List[Tuple[int, str, float, float]]:
         """Return [(tick, path_id, activation, temperature)] for all SuggestMode firings.

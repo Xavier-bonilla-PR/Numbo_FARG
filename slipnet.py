@@ -37,19 +37,103 @@ _semaphore = asyncio.Semaphore(MAX_CONCURRENT_LLM)
 
 # ── Temperature helper ────────────────────────────────────────────────────────
 
-def temperature_for_activation(activation: float) -> float:
-    """Map agent activation [0.0, 1.0] → LLM temperature [0.9, 0.2].
+def temperature_for_activation(activation: float, depth: int = 0) -> float:
+    """Map (activation, chain_depth) → LLM temperature.
 
-    High-activation agents are "confident" → low temperature (precise).
-    Low-activation agents are "exploring" → high temperature (creative).
+    Two factors compose the temperature:
+
+    f(activation) = 0.9 - 0.7 * activation
+        High-activation agents are "confident" → low temperature (precise).
+        Low-activation agents are "exploring"  → high temperature (creative).
+
+    g(depth) = max(0.2, 1.0 - 0.15 * depth)
+        Fresh legs (depth 0–1) keep full temperature  → speculative.
+        Deep chains (depth ≥ 5) are clamped to 0.2×  → committed evaluation.
+
+    temperature = f(activation) * g(depth)
+
+    This separates exploration/exploitation at the LLM call level: a low-
+    activation agent on a deep chain is still evaluated precisely (low T),
+    not allowed to hallucinate freely just because its activation dropped.
     """
     clamped = min(1.0, max(0.0, activation))
-    return round(0.9 - 0.7 * clamped, 3)
+    base = 0.9 - 0.7 * clamped
+    depth_factor = max(0.2, 1.0 - 0.15 * depth)
+    return round(base * depth_factor, 3)
 
 
 # ── Async LLM call ────────────────────────────────────────────────────────────
 
 import time as _time
+
+
+import re as _re
+import ast as _ast
+
+
+def _extract_json(raw: str) -> Dict[str, Any]:
+    """Robustly extract a JSON object from an LLM response.
+
+    Handles the three most common LLM formatting problems:
+      1. Markdown code fences:  ```json { … } ```
+      2. Surrounding prose before/after the JSON object
+      3. Python-style single-quoted dicts (ast.literal_eval fallback)
+    """
+    if not raw:
+        raise ValueError("Empty LLM response")
+
+    # Strip markdown code fences (```json ... ``` or ``` ... ```)
+    raw = _re.sub(r"```(?:json)?\s*", "", raw).strip()
+    raw = raw.replace("```", "").strip()
+
+    # Find the outermost { } pair using a bracket counter
+    start = raw.find("{")
+    if start == -1:
+        raise ValueError(f"No JSON object found in response: {raw[:120]!r}")
+
+    depth = 0
+    end = -1
+    in_str = False
+    escape = False
+    for i, ch in enumerate(raw[start:], start):
+        if escape:
+            escape = False
+            continue
+        if ch == "\\" and in_str:
+            escape = True
+            continue
+        if ch == '"' and not escape:
+            in_str = not in_str
+        if in_str:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+
+    if end == -1:
+        raise ValueError(f"Unclosed JSON object in response: {raw[:120]!r}")
+
+    candidate = raw[start:end]
+
+    # Standard JSON parse (fast path)
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        pass
+
+    # Fallback: ast.literal_eval handles Python-style single-quoted dicts
+    try:
+        result = _ast.literal_eval(candidate)
+        if isinstance(result, dict):
+            return result
+    except (ValueError, SyntaxError):
+        pass
+
+    raise ValueError(f"Could not parse JSON from: {candidate[:120]!r}")
 
 
 async def _async_query(prompt: str, temperature: float) -> Dict[str, Any]:
@@ -75,14 +159,22 @@ async def _async_query(prompt: str, temperature: float) -> Dict[str, Any]:
                     "model": MODEL_ID,
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": temperature,
+                    # Disable Qwen3 extended thinking so content is never null.
+                    "reasoning": {"enabled": False},
                 },
             )
     elapsed = _time.monotonic() - t0
     log.debug("LLM response  status=%d elapsed=%.1fs", resp.status_code, elapsed)
     resp.raise_for_status()
-    raw = resp.json()["choices"][0]["message"]["content"]
+    msg = resp.json()["choices"][0]["message"]
+    raw = msg.get("content")
+    # Qwen3 thinking mode: content=null, answer inside reasoning_content.
+    if raw is None:
+        reasoning = msg.get("reasoning_content") or msg.get("reasoning") or ""
+        # The JSON answer follows </think> if present, else use full reasoning.
+        raw = reasoning.split("</think>")[-1].strip() if "</think>" in reasoning else reasoning.strip()
     log.debug("LLM raw content: %.200s", raw)
-    return json.loads(raw)
+    return _extract_json(raw)
 
 
 def _run_async(coro) -> Any:
@@ -131,8 +223,9 @@ class RealSlipnet:
         mode: str,
         activation: float = 0.5,
         visited_locs: Optional[List[str]] = None,
+        depth: int = 0,
     ) -> Optional[Dict[str, Any]]:
-        temp = temperature_for_activation(activation)
+        temp = temperature_for_activation(activation, depth)
         # Inject path memory so the LLM avoids backtracking.
         if visited_locs and len(visited_locs) > 1:
             history = " -> ".join(visited_locs)
@@ -168,9 +261,11 @@ class RealSlipnet:
         path_id: str,
         legs: Any,
         activation: float = 0.5,
-    ) -> float:
-        temp = temperature_for_activation(activation)
-        legs_desc = " → ".join(f"{l.from_loc}→{l.to_loc}({l.mode})" for l in legs)
+        max_retries: int = 3,
+    ) -> float | None:
+        legs_list = list(legs)
+        temp = temperature_for_activation(activation, depth=len(legs_list))
+        legs_desc = " → ".join(f"{l.from_loc}→{l.to_loc}({l.mode})" for l in legs_list)
         prompt = (
             f"You are a Vietnam travel expert. "
             f"Return JSON ONLY (no markdown). "
@@ -178,12 +273,17 @@ class RealSlipnet:
             f"scenic value, cultural richness, and practical feasibility: {legs_desc}. "
             f'Format: {{"score": 0.75, "reason": "..."}}'
         )
-        try:
-            result = _run_async(_async_query(prompt, temp))
-            return float(result.get("score", 0.5))
-        except Exception as exc:
-            log.warning("evaluate_path failed: %s", exc)
-        return 0.5
+        for attempt in range(1, max_retries + 1):
+            try:
+                result = _run_async(_async_query(prompt, temp))
+                raw = result.get("score")
+                if raw is not None:
+                    return float(raw)
+                log.warning("evaluate_path got null score (attempt %d/%d)", attempt, max_retries)
+            except Exception as exc:
+                log.warning("evaluate_path failed (attempt %d/%d): %s", attempt, max_retries, exc)
+        log.error("evaluate_path gave up after %d attempts for %s", max_retries, path_id)
+        return None
 
     def compare_paths(
         self,
@@ -191,7 +291,8 @@ class RealSlipnet:
         imcell_b: Any,
         activation: float = 0.5,
     ) -> str:
-        temp = temperature_for_activation(activation)
+        avg_depth = (len(imcell_a.legs) + len(imcell_b.legs)) // 2
+        temp = temperature_for_activation(activation, depth=avg_depth)
         desc_a = " → ".join(l.to_loc for l in imcell_a.legs) or imcell_a.current_loc
         desc_b = " → ".join(l.to_loc for l in imcell_b.legs) or imcell_b.current_loc
         prompt = (
@@ -332,6 +433,7 @@ class MockSlipnet:
         mode: str,
         activation: float = 0.5,
         visited_locs: Optional[List[str]] = None,
+        depth: int = 0,
     ) -> Optional[Dict[str, Any]]:
         key = (from_loc, to_loc, mode)
         return self._ROUTES.get(key)
@@ -355,3 +457,62 @@ class MockSlipnet:
         score_a = len({l.to_loc for l in imcell_a.legs} & self._INTERESTING)
         score_b = len({l.to_loc for l in imcell_b.legs} & self._INTERESTING)
         return "a" if score_a >= score_b else "b"
+
+
+# ── Counting wrapper ──────────────────────────────────────────────────────────
+
+class CountingSlipnet:
+    """Transparent wrapper that counts LLM calls per method type.
+
+    Wraps any slipnet (MockSlipnet or RealSlipnet) and delegates every call
+    through to the inner object while incrementing a per-type counter.
+    Both run_simulation() and run_baseline() use this wrapper so their call
+    accounting is identical and directly comparable.
+    """
+
+    CALL_TYPES = ("query_modes", "query_route", "evaluate_path", "compare_paths")
+
+    def __init__(self, inner) -> None:
+        self._inner = inner
+        self.calls: Dict[str, int] = {k: 0 for k in self.CALL_TYPES}
+
+    @property
+    def total(self) -> int:
+        return sum(self.calls.values())
+
+    def query_modes(self, from_loc: str, to_loc: str) -> List[str]:
+        self.calls["query_modes"] += 1
+        return self._inner.query_modes(from_loc, to_loc)
+
+    def query_route(
+        self,
+        from_loc: str,
+        to_loc: str,
+        mode: str,
+        activation: float = 0.5,
+        visited_locs: Optional[List[str]] = None,
+        depth: int = 0,
+    ) -> Optional[Dict[str, Any]]:
+        self.calls["query_route"] += 1
+        return self._inner.query_route(
+            from_loc, to_loc, mode,
+            activation=activation, visited_locs=visited_locs, depth=depth,
+        )
+
+    def evaluate_path(
+        self,
+        path_id: str,
+        legs: Any,
+        activation: float = 0.5,
+    ) -> float | None:
+        self.calls["evaluate_path"] += 1
+        return self._inner.evaluate_path(path_id, legs, activation=activation)
+
+    def compare_paths(
+        self,
+        imcell_a: Any,
+        imcell_b: Any,
+        activation: float = 0.5,
+    ) -> str:
+        self.calls["compare_paths"] += 1
+        return self._inner.compare_paths(imcell_a, imcell_b, activation=activation)
