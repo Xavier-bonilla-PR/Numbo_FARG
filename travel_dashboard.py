@@ -870,10 +870,12 @@ def panel_farg_vs_baseline(farg_paths: list, farg_scores: dict,
     st.plotly_chart(
         chart_score_vs_hours(farg_paths, farg_scores, base_run),
         use_container_width=True,
+        key="cmp_score_vs_hours",
     )
     st.plotly_chart(
         chart_call_breakdown(farg_explore_calls, farg_score_calls, base_run),
         use_container_width=True,
+        key="cmp_call_breakdown",
     )
 
     # ── Side-by-side path cards ────────────────────────────────────────────────
@@ -1121,11 +1123,13 @@ def panel_multi_run_stats(farg_history: list, base_history: list) -> None:
         st.plotly_chart(
             chart_score_distribution(farg_history, base_history),
             use_container_width=True,
+            key="multi_score_distribution",
         )
     with cv2:
         st.plotly_chart(
             chart_per_run_trend(farg_history, base_history),
             use_container_width=True,
+            key="multi_per_run_trend",
         )
 
     # ── Novel routes ──────────────────────────────────────────────────────────
@@ -1215,9 +1219,9 @@ def panel_multi_run_stats(farg_history: list, base_history: list) -> None:
 
             ac1, ac2 = st.columns([2, 3])
             with ac1:
-                st.plotly_chart(chart_exploration_depth(agg), use_container_width=True)
+                st.plotly_chart(chart_exploration_depth(agg), use_container_width=True, key="multi_agg_depth")
             with ac2:
-                st.plotly_chart(chart_exploration_sankey(agg), use_container_width=True)
+                st.plotly_chart(chart_exploration_sankey(agg), use_container_width=True, key="multi_agg_sankey")
 
 
 def _panel_run_browser() -> None:
@@ -1528,16 +1532,16 @@ def main() -> None:
     # ── Row 1: Activation + Composition ───────────────────────────────────────
     c1, c2 = st.columns([3, 2])
     with c1:
-        st.plotly_chart(chart_activation_timeline(mc, top_n), use_container_width=True)
+        st.plotly_chart(chart_activation_timeline(mc, top_n), use_container_width=True, key="farg_activation_timeline")
     with c2:
-        st.plotly_chart(chart_workspace_composition(mc), use_container_width=True)
+        st.plotly_chart(chart_workspace_composition(mc), use_container_width=True, key="farg_workspace_composition")
 
     # ── Row 2: Act Probability + Temperature ──────────────────────────────────
     c3, c4 = st.columns(2)
     with c3:
-        st.plotly_chart(chart_act_probability(mc), use_container_width=True)
+        st.plotly_chart(chart_act_probability(mc), use_container_width=True, key="farg_act_probability")
     with c4:
-        st.plotly_chart(chart_temperature(mc), use_container_width=True)
+        st.plotly_chart(chart_temperature(mc), use_container_width=True, key="farg_temperature")
 
     # ── Row 3: Competition Graph ───────────────────────────────────────────────
     st.subheader("Competition Graph (Network Topology)")
@@ -1547,14 +1551,14 @@ def main() -> None:
         min(ticks_available - 1, 20),
         key="graph_tick",
     )
-    st.plotly_chart(chart_competition_graph(mc, tick_idx), use_container_width=True)
+    st.plotly_chart(chart_competition_graph(mc, tick_idx), use_container_width=True, key="farg_competition_graph")
 
     # ── Row 4: Funnel + Async Bottleneck ──────────────────────────────────────
     c5, c6 = st.columns([2, 3])
     with c5:
-        st.plotly_chart(chart_perturbation_funnel(mc), use_container_width=True)
+        st.plotly_chart(chart_perturbation_funnel(mc), use_container_width=True, key="farg_perturbation_funnel")
     with c6:
-        st.plotly_chart(chart_pending_llm(mc), use_container_width=True)
+        st.plotly_chart(chart_pending_llm(mc), use_container_width=True, key="farg_pending_llm")
 
     # ── Row 4b: Exploration Tree ──────────────────────────────────────────────
     st.divider()
@@ -1594,9 +1598,9 @@ def main() -> None:
 
         c_depth, c_sankey = st.columns([2, 3])
         with c_depth:
-            st.plotly_chart(chart_exploration_depth(tree), use_container_width=True)
+            st.plotly_chart(chart_exploration_depth(tree), use_container_width=True, key="farg_exploration_depth")
         with c_sankey:
-            st.plotly_chart(chart_exploration_sankey(tree), use_container_width=True)
+            st.plotly_chart(chart_exploration_sankey(tree), use_container_width=True, key="farg_exploration_sankey")
 
         # Per-first-stop breakdown table
         with st.expander("First-leg breakdown table"):
