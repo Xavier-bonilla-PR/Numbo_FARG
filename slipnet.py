@@ -274,7 +274,7 @@ class RealSlipnet:
         )
         try:
             result = _run_async(_async_query(prompt, temp))
-            return float(result.get("score", 0.5))
+            return float(result.get("score") or 0.5)
         except Exception as exc:
             log.warning("evaluate_path failed: %s", exc)
         return 0.5

@@ -107,7 +107,7 @@ def run_baseline(
                     from_loc=str(leg_data["from_loc"]),
                     to_loc=str(leg_data["to_loc"]),
                     mode=str(leg_data.get("mode", mode)),
-                    duration_hours=float(leg_data.get("duration_hours", 0.0)),
+                    duration_hours=float(leg_data.get("duration_hours") or 0.0),
                     notes=str(leg_data.get("notes", "")),
                 )
             except (KeyError, TypeError, ValueError) as exc:
