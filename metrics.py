@@ -65,6 +65,9 @@ class TickSnapshot:
     chosen_type: Optional[str] = None
     # path_id -> committed canvas leg count at this tick (for depth-aware temperature)
     canvas_sizes: Dict[str, int] = field(default_factory=dict)
+    # elem_id -> path_id for every agent element recorded this tick.
+    # Stored directly so temperature_series() never has to parse elem_id strings.
+    agent_path_ids: Dict[str, str] = field(default_factory=dict)
 
 
 # ── MetricsCollector ──────────────────────────────────────────────────────────
@@ -192,11 +195,17 @@ class MetricsCollector:
         # ── 4. Activations snapshot ────────────────────────────────────────────
         activations: Dict[str, Tuple[str, float]] = {}
         type_counts: Dict[str, int] = {}
+        # elem_id → path_id for agents that carry a path_id field.
+        # Stored directly so temperature_series() never has to parse elem_id
+        # strings — parsing is fragile because _elem_id's format has no contract.
+        agent_path_ids: Dict[str, str] = {}
         for elem, a in ws.elements.items():
             eid = self._elem_id(elem)
             etype = self._elem_type(elem)
             activations[eid] = (etype, a)
             type_counts[etype] = type_counts.get(etype, 0) + 1
+            if hasattr(elem, "path_id"):
+                agent_path_ids[eid] = elem.path_id
 
         # ── 5. Act-probability: fraction of eligible agents that can_act ───────
         eligible = ws.agents_not_pending()
@@ -231,6 +240,7 @@ class MetricsCollector:
             edges=edges,
             chosen_type=self._elem_type(chosen) if chosen else None,
             canvas_sizes=canvas_sizes,
+            agent_path_ids=agent_path_ids,
         ))
 
     def log_final(self, paths) -> None:
@@ -295,17 +305,17 @@ class MetricsCollector:
         Temperature is derived from activation AND canvas depth recorded at each
         tick where a SuggestMode was the chosen agent, matching the formula used
         by the actual LLM calls (temperature_for_activation(a, depth=canvas_depth)).
+
+        Depth is looked up via snap.agent_path_ids[eid] → snap.canvas_sizes[path_id],
+        both recorded directly at log_tick time.  No string parsing is performed.
         """
-        import re
         from slipnet import temperature_for_activation
         result = []
         for snap in self.snapshots:
             if snap.chosen_type == "SuggestMode":
                 for eid, (etype, a) in snap.activations.items():
                     if etype == "SuggestMode":
-                        # elem_id format: "SM[path-N/mode]" — extract path_id
-                        m = re.search(r"SM\[([^/\]]+)/", eid)
-                        pid = m.group(1) if m else ""
+                        pid = snap.agent_path_ids.get(eid, "")
                         depth = snap.canvas_sizes.get(pid, 0)
                         temp = temperature_for_activation(a, depth=depth)
                         result.append((snap.tick, eid, a, temp))

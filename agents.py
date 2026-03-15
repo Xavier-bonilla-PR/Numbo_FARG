@@ -114,7 +114,15 @@ class SuggestMode:
     current_loc: str
     goal: str
     mode: str
-    origin_id: str = ""   # shared among sibling agents from the same decision point
+    # Shared among sibling agents from the same decision point.
+    # ASSUMPTION: in the current architecture exactly one Want exists per
+    # (from_loc, to_loc) pair, so the string f"{from_loc}→{to_loc}" is a
+    # unique decision-point identifier.  If the architecture ever supports
+    # multiple simultaneous Want agents with the same origin/destination
+    # (e.g. multi-goal problems), origin_id must be scoped to the Want
+    # instance (e.g. id(want) or a per-Want UUID) to avoid cross-goal-tree
+    # inhibition.  Continuation agents leave origin_id="" and never compete.
+    origin_id: str = ""
 
     def can_go(self, ws) -> bool:
         return (
@@ -148,10 +156,13 @@ class SuggestMode:
                 depth=len(canvas_cells),
             )
         finally:
-            # Always clear PendingLLM regardless of exception so the agent
-            # doesn't freeze from selection until it decays below MIN_ACTIVATION,
-            # which would silently kill this path's exploration branch and show
-            # a misleading slowly-decrementing PendingLLM count in the dashboard.
+            # Scope: ONLY ws.untag is in this finally block.  leg_data
+            # validation and SuggestRoute construction are intentionally
+            # placed AFTER the try/finally so they run only on success and
+            # cannot be reached in the exception path.  The finally block
+            # performs no other workspace writes because the exception state
+            # is unknown — any further mutations could leave the workspace
+            # in an inconsistent state.
             ws.untag(self, PendingLLM)
 
         if leg_data is None:
@@ -271,10 +282,21 @@ class SuggestRoute:
                     )
                     # Commit historical (already-canonical) legs directly so
                     # that canvas reconstruction works for the new branch.
-                    # Dedup guard: a repeated branching call from the same
-                    # parent ImCell must not append the same legs twice,
-                    # which would corrupt the position counter for new_pid.
+                    #
+                    # Dedup guard for repeated branching from the same parent
+                    # ImCell.  Invariants:
+                    #   • new_pid is freshly minted by ws.new_path_id(), so
+                    #     ws.canvas_legs(new_pid) is always empty here and
+                    #     already_in_canvas starts as an empty set.
+                    #   • already_in_canvas is updated inside the loop (after
+                    #     each commit) so each leg is allowed through once and
+                    #     any duplicate is blocked on subsequent iterations —
+                    #     not built from a stale pre-loop snapshot.
                     already_in_canvas = {c.leg for c in ws.canvas_legs(new_pid)}
+                    assert not already_in_canvas, (
+                        f"new_pid {new_pid!r} already has canvas entries before "
+                        "branch_legs are committed — path_id reuse detected"
+                    )
                     for bl in branch_legs:
                         if bl not in already_in_canvas:
                             ws.commit_leg(new_pid, bl)
@@ -353,17 +375,23 @@ class SuggestRoute:
         ws.downboost(self)
 
         if self.proposed_leg.to_loc == self.goal:
-            # Declare this canvas chain complete — one GoalReached tag per chain,
-            # so all paths reaching the goal are captured (no single-halt stop).
+            # Declare this canvas chain complete.  Dedup by path_id against
+            # ws.tags — the same authority used by _detect_complete_paths —
+            # so that a PathComplete bridge and a canvas commit for the same
+            # path_id can never produce two GoalReached tags.
             from tags import GoalReached
-            canvas_cells = sorted(ws.canvas_legs(self.path_id), key=lambda c: c.position)
-            chain_legs = tuple(c.leg for c in canvas_cells)
-            path_locs = (canvas_cells[0].leg.from_loc,) + tuple(c.leg.to_loc for c in canvas_cells)
-            ws.tag(GoalReached(path_id=self.path_id, path=path_locs, legs=chain_legs))
-            log.info(
-                "GoalReached: %s  %s",
-                self.path_id, " -> ".join(path_locs),
-            )
+            if not any(
+                isinstance(t, GoalReached) and t.path_id == self.path_id
+                for t in ws.tags
+            ):
+                canvas_cells = sorted(ws.canvas_legs(self.path_id), key=lambda c: c.position)
+                chain_legs = tuple(c.leg for c in canvas_cells)
+                path_locs = (canvas_cells[0].leg.from_loc,) + tuple(c.leg.to_loc for c in canvas_cells)
+                ws.tag(GoalReached(path_id=self.path_id, path=path_locs, legs=chain_legs))
+                log.info(
+                    "GoalReached: %s  %s",
+                    self.path_id, " -> ".join(path_locs),
+                )
         else:
             next_sm = SuggestMode(
                 path_id=self.path_id,
