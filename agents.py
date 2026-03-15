@@ -141,13 +141,18 @@ class SuggestMode:
         else:
             visited = []
 
-        leg_data = slipnet.query_route(
-            self.current_loc, self.goal, self.mode, activation,
-            visited_locs=visited,
-            depth=len(canvas_cells),
-        )
-
-        ws.untag(self, PendingLLM)
+        try:
+            leg_data = slipnet.query_route(
+                self.current_loc, self.goal, self.mode, activation,
+                visited_locs=visited,
+                depth=len(canvas_cells),
+            )
+        finally:
+            # Always clear PendingLLM regardless of exception so the agent
+            # doesn't freeze from selection until it decays below MIN_ACTIVATION,
+            # which would silently kill this path's exploration branch and show
+            # a misleading slowly-decrementing PendingLLM count in the dashboard.
+            ws.untag(self, PendingLLM)
 
         if leg_data is None:
             log.debug("SuggestMode.go: no route returned, staying alive")
@@ -266,8 +271,14 @@ class SuggestRoute:
                     )
                     # Commit historical (already-canonical) legs directly so
                     # that canvas reconstruction works for the new branch.
+                    # Dedup guard: a repeated branching call from the same
+                    # parent ImCell must not append the same legs twice,
+                    # which would corrupt the position counter for new_pid.
+                    already_in_canvas = {c.leg for c in ws.canvas_legs(new_pid)}
                     for bl in branch_legs:
-                        ws.commit_leg(new_pid, bl)
+                        if bl not in already_in_canvas:
+                            ws.commit_leg(new_pid, bl)
+                            already_in_canvas.add(bl)
                     # Route the proposed leg through a proper SuggestRoute so
                     # its canvas commit is visible to the metrics survival
                     # funnel, ActIsDone logic, and post-act() downboost.

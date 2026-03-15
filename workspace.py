@@ -14,8 +14,8 @@ Key design points
               negative weight  →  antipathy (competing paths)
 • tags:     set of Tag instances (also present in elements)
 • canvas:   list of CanvasCell (committed legs, ordered by path+position)
-• Agent selection: weighted by activation², excludes PendingLLM / Blocked /
-  ActIsDone-exhausted agents
+• Agent selection: weighted by activation², excludes PendingLLM and
+  ActIsDone-exhausted agents (can neither .go() nor .act())
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ from config import (
     PROPAGATION_SCALE,
     SUPPORT_WEIGHT,
 )
-from tags import ActIsDone, Blocked, PendingLLM, Tag
+from tags import ActIsDone, PendingLLM, Tag
 
 
 # ── Agent type registry (import-time, avoids circular imports) ─────────────────
@@ -236,7 +236,6 @@ class Workspace:
 
         Excluded:
           • Tagged PendingLLM (waiting for LLM response)
-          • Tagged Blocked (dead end)
           • Can neither .go() nor .act() right now (exhausted agents)
         """
         agent_types = _agent_types()
@@ -246,8 +245,6 @@ class Workspace:
                 continue
             if self.has_tag(elem, PendingLLM):
                 continue
-            if self.has_tag(elem, Blocked):
-                continue
             can_g = hasattr(elem, "can_go") and elem.can_go(self)
             can_a = hasattr(elem, "can_act") and elem.can_act(self)
             if not can_g and not can_a:
@@ -256,13 +253,18 @@ class Workspace:
         return result
 
     def choose_agent(self, agents: List[Any]) -> Optional[Any]:
-        """Weighted random selection; weight = activation²."""
+        """Weighted random selection; weight = activation².
+
+        Returns None when all agent activations are zero — signalling entropy
+        collapse to the caller rather than selecting blindly via uniform random.
+        The caller is responsible for logging and/or halting the loop.
+        """
         if not agents:
             return None
         weights = [max(0.0, self.elements.get(a, 0.0)) ** 2 for a in agents]
         total = sum(weights)
         if total <= 0.0:
-            return random.choice(agents)
+            return None   # entropy collapse: no competitive signal remaining
         return random.choices(agents, weights=weights, k=1)[0]
 
     # ── ImCell queries ────────────────────────────────────────────────────────

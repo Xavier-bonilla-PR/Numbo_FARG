@@ -33,7 +33,7 @@ from typing import List, Optional
 from agents import AGENT_TYPES, Evaluate, SeekEvidence
 from canvas import ImCell
 from config import ACT_EARLY_PROB, ACT_LATE_TICK, GOAL, MAX_TICKS, MIN_COMPLETE_PATHS
-from tags import ActIsDone, Blocked, GettingCloser, GoIsDone, GoalReached, PathComplete
+from tags import ActIsDone, GettingCloser, GoIsDone, GoalReached, PathComplete
 
 log = logging.getLogger(__name__)
 
@@ -88,19 +88,20 @@ def _detect_complete_paths(ws) -> None:
         ws.boost(elem)
         log.info("Path complete (score=%.2f): %s", best_score, " -> ".join(path_locs))
 
-
-def _detect_blocked_agents(ws) -> None:
-    """Mark agents that have nothing left to do as Blocked."""
-    for elem in list(ws.elements.keys()):
-        if not isinstance(elem, AGENT_TYPES):
-            continue
-        if ws.has_tag(elem, Blocked):
-            continue
-        # Agent is exhausted if it's ActIsDone and cannot go
-        if ws.has_tag(elem, ActIsDone):
-            can_still_go = hasattr(elem, "can_go") and elem.can_go(ws)
-            if not can_still_go:
-                ws.tag(Blocked(taggee=elem, reason="ActIsDone and cannot go"))
+        # Bridge imagination → canvas: if no GoalReached exists yet for this
+        # path_id, emit one from the ImCell's legs so termination (which counts
+        # GoalReached) fires even when SuggestRoute.act() never committed the
+        # same path to canvas.  Dedup by path_id to avoid double-counting a
+        # canvas chain that already emitted its own GoalReached.
+        if not any(
+            isinstance(t, GoalReached) and t.path_id == elem.path_id
+            for t in ws.tags
+        ):
+            ws.tag(GoalReached(path_id=elem.path_id, path=path_locs, legs=elem.legs))
+            log.info(
+                "GoalReached (via PathComplete): %s  %s",
+                elem.path_id, " -> ".join(path_locs),
+            )
 
 
 def _spawn_evaluate_agents(ws) -> None:
@@ -128,7 +129,6 @@ def _spawn_evaluate_agents(ws) -> None:
 def run_detectors(ws) -> None:
     """Run all detectors once per tick."""
     _detect_complete_paths(ws)
-    _detect_blocked_agents(ws)
     # Only spawn evaluators when we have at least 2 distinct ImCells
     if len(ws.all_imcells()) >= 2:
         _spawn_evaluate_agents(ws)
@@ -155,6 +155,8 @@ def run_loop(ws, slipnet, logger=None, max_ticks: int = MAX_TICKS) -> List[GoalR
     population used internally by detectors; they are not returned here.
     """
     complete: List[GoalReached] = []
+    _entropy_streak: int = 0          # consecutive ticks with all-zero activations
+    _MAX_ENTROPY_STREAK: int = 5      # halt after this many consecutive collapses
 
     for tick in range(max_ticks):
 
@@ -185,7 +187,19 @@ def run_loop(ws, slipnet, logger=None, max_ticks: int = MAX_TICKS) -> List[GoalR
         # ── 6. Choose ONE agent weighted by activation² ───────────────────
         chosen = ws.choose_agent(available)
         if chosen is None:
+            # All activations collapsed to zero — competitive signal is gone.
+            _entropy_streak += 1
+            log.warning(
+                "Tick %d: entropy collapse (streak=%d/%d) — all agent "
+                "activations are zero.",
+                tick, _entropy_streak, _MAX_ENTROPY_STREAK,
+            )
+            if _entropy_streak >= _MAX_ENTROPY_STREAK:
+                log.warning("Halting: entropy collapse sustained for %d ticks.", _MAX_ENTROPY_STREAK)
+                break
+            ws.prune()
             continue
+        _entropy_streak = 0   # reset on any successful selection
 
         # ── 7. go() or act()? ─────────────────────────────────────────────
         # Early ticks strongly prefer go() to build up a rich ImCell population.
