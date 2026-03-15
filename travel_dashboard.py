@@ -1220,6 +1220,133 @@ def panel_multi_run_stats(farg_history: list, base_history: list) -> None:
                 st.plotly_chart(chart_exploration_sankey(agg), use_container_width=True)
 
 
+def _panel_run_browser() -> None:
+    """Browse every saved run; load into the active dashboard or add to comparison."""
+    from run_store import list_runs, load_run, delete_run
+
+    saved = list_runs()
+    if not saved:
+        st.caption("No runs saved yet. Click a Run button and runs will be auto-saved here.")
+        return
+
+    farg_saved    = [r for r in saved if r["type"] == "farg"]
+    base_saved    = [r for r in saved if r["type"] == "baseline"]
+    farg_in_cmp   = {r.get("_filename", "") for r in st.session_state.get("farg_run_history", [])}
+    base_in_cmp   = {getattr(r, "_filename", "") for r in st.session_state.get("base_run_history", [])}
+    active_farg   = st.session_state.get("_active_farg_file", "")
+    active_base   = st.session_state.get("_active_base_file", "")
+
+    col_farg, col_base = st.columns(2)
+
+    with col_farg:
+        st.markdown(f"**FARG — {len(farg_saved)} saved run(s)**")
+        for rm in farg_saved:
+            ts = rm["saved_at"]          # YYYYMMDD_HHMMSS
+            label = (
+                f"{ts[6:8]}/{ts[4:6]} {ts[9:11]}:{ts[11:13]}  ·  "
+                f"{rm['n_paths']} path(s)  ·  avg {rm['avg_score']:.2f}  ·  "
+                f"{rm.get('n_ticks', '?')} ticks"
+            )
+            is_active = rm["filename"] == active_farg
+            is_in_cmp = rm["filename"] in farg_in_cmp
+            with st.container(border=True):
+                hdr_col, del_col = st.columns([8, 1])
+                hdr_col.caption(
+                    ("📌 **[active]** " if is_active else "") + label
+                )
+                if del_col.button("🗑", key=f"del_f_{rm['filename']}",
+                                  help="Delete this run from disk"):
+                    delete_run(rm["path"])
+                    # Remove from history if present
+                    hist = [r for r in st.session_state.get("farg_run_history", [])
+                            if r.get("_filename") != rm["filename"]]
+                    st.session_state["farg_run_history"] = hist
+                    st.rerun()
+
+                b_view, b_cmp = st.columns(2)
+                if b_view.button(
+                    "📂 View" + (" ✓" if is_active else ""),
+                    key=f"view_f_{rm['filename']}", use_container_width=True,
+                    help="Load this run into the main dashboard.",
+                ):
+                    data = load_run(rm["path"])
+                    st.session_state["mc"]          = data["mc"]
+                    st.session_state["paths"]       = data["paths"]
+                    st.session_state["farg_calls"]  = data["arch_calls"]
+                    st.session_state["farg_scores"] = data["farg_scores"]
+                    st.session_state["_active_farg_file"] = rm["filename"]
+                    st.rerun()
+
+                cmp_label = ("✅ In comparison" if is_in_cmp else "+ Compare")
+                if b_cmp.button(
+                    cmp_label, key=f"cmp_f_{rm['filename']}", use_container_width=True,
+                    disabled=is_in_cmp,
+                    help="Add to multi-run comparison panel.",
+                ):
+                    data = load_run(rm["path"])
+                    hist = list(st.session_state.get("farg_run_history", []))
+                    entry = {
+                        "run_idx":     len(hist) + 1,
+                        "mc":          data["mc"],
+                        "paths":       data["paths"],
+                        "arch_calls":  data["arch_calls"],
+                        "farg_scores": data["farg_scores"],
+                        "_filename":   rm["filename"],
+                    }
+                    hist.append(entry)
+                    st.session_state["farg_run_history"] = hist
+                    st.rerun()
+
+    with col_base:
+        st.markdown(f"**Baseline — {len(base_saved)} saved run(s)**")
+        for rm in base_saved:
+            ts = rm["saved_at"]
+            label = (
+                f"{ts[6:8]}/{ts[4:6]} {ts[9:11]}:{ts[11:13]}  ·  "
+                f"{rm['n_paths']} path(s)  ·  avg {rm['avg_score']:.2f}  ·  "
+                f"{rm.get('modes_complete', '?')}/{rm.get('modes_tried', '?')} modes"
+            )
+            is_active = rm["filename"] == active_base
+            is_in_cmp = rm["filename"] in base_in_cmp
+            with st.container(border=True):
+                hdr_col, del_col = st.columns([8, 1])
+                hdr_col.caption(
+                    ("📌 **[active]** " if is_active else "") + label
+                )
+                if del_col.button("🗑", key=f"del_b_{rm['filename']}",
+                                  help="Delete this run from disk"):
+                    delete_run(rm["path"])
+                    hist = [r for r in st.session_state.get("base_run_history", [])
+                            if getattr(r, "_filename", "") != rm["filename"]]
+                    st.session_state["base_run_history"] = hist
+                    st.rerun()
+
+                b_view, b_cmp = st.columns(2)
+                if b_view.button(
+                    "📂 View" + (" ✓" if is_active else ""),
+                    key=f"view_b_{rm['filename']}", use_container_width=True,
+                    help="Load this run as the active baseline.",
+                ):
+                    data = load_run(rm["path"])
+                    st.session_state["base_run"] = data["_run"]
+                    st.session_state["_active_base_file"] = rm["filename"]
+                    st.rerun()
+
+                cmp_label = ("✅ In comparison" if is_in_cmp else "+ Compare")
+                if b_cmp.button(
+                    cmp_label, key=f"cmp_b_{rm['filename']}", use_container_width=True,
+                    disabled=is_in_cmp,
+                    help="Add to multi-run comparison panel.",
+                ):
+                    data = load_run(rm["path"])
+                    base_run = data["_run"]
+                    base_run._filename = rm["filename"]
+                    hist = list(st.session_state.get("base_run_history", []))
+                    hist.append(base_run)
+                    st.session_state["base_run_history"] = hist
+                    st.rerun()
+
+
 # ── Main Streamlit app ────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -1288,6 +1415,7 @@ def main() -> None:
     _use_mock = use_mock or not os.getenv("OPENROUTER_API_KEY")
 
     if run_btn:
+        from run_store import save_farg_run
         farg_history = list(st.session_state.get("farg_run_history", []))
         prog = st.progress(0.0, text=f"FARG run 1 / {n_runs}…")
         for i in range(n_runs):
@@ -1298,13 +1426,16 @@ def main() -> None:
             _mc, _paths, _arch, _scores = run_simulation(
                 use_mock=_use_mock, max_ticks=max_ticks
             )
-            farg_history.append({
-                "run_idx": len(farg_history) + 1,
-                "mc": _mc,
-                "paths": _paths,
+            run_entry = {
+                "run_idx":    len(farg_history) + 1,
+                "mc":         _mc,
+                "paths":      _paths,
                 "arch_calls": _arch,
                 "farg_scores": _scores,
-            })
+            }
+            saved_path = save_farg_run(run_entry)
+            run_entry["_filename"] = saved_path.name
+            farg_history.append(run_entry)
             prog.progress(
                 (i + 1.0) / n_runs,
                 text=f"FARG run {i + 1} / {n_runs} — {len(_paths)} path(s) found",
@@ -1316,14 +1447,16 @@ def main() -> None:
         st.session_state["paths"] = last["paths"]
         st.session_state["farg_calls"] = last["arch_calls"]
         st.session_state["farg_scores"] = last["farg_scores"]
+        st.session_state["_active_farg_file"] = last.get("_filename", "")
         total_paths = sum(len(r["paths"]) for r in farg_history)
         st.success(
-            f"FARG: {n_runs} run(s) added. "
-            f"History: {len(farg_history)} run(s), {total_paths} total paths."
+            f"FARG: {n_runs} run(s) saved and added to history. "
+            f"Total: {len(farg_history)} run(s), {total_paths} paths."
         )
 
     if base_btn:
         from baseline import run_baseline
+        from run_store import save_baseline_run
         from slipnet import MockSlipnet, RealSlipnet, CountingSlipnet
         base_history = list(st.session_state.get("base_run_history", []))
         prog = st.progress(0.0, text=f"Baseline run 1 / {n_runs}…")
@@ -1337,6 +1470,8 @@ def main() -> None:
             _base_run = run_baseline(base_counting, START, GOAL)
             _base_run.calls_by_type = dict(base_counting.calls)
             _base_run.llm_calls = base_counting.total
+            saved_path = save_baseline_run(_base_run)
+            _base_run._filename = saved_path.name   # tag for dedup
             base_history.append(_base_run)
             prog.progress(
                 (i + 1.0) / n_runs,
@@ -1345,17 +1480,36 @@ def main() -> None:
         prog.empty()
         st.session_state["base_run_history"] = base_history
         st.session_state["base_run"] = base_history[-1]
+        st.session_state["_active_base_file"] = getattr(base_history[-1], "_filename", "")
         total_base_paths = sum(len(r.paths) for r in base_history)
         st.success(
-            f"Baseline: {n_runs} run(s) added. "
-            f"History: {len(base_history)} run(s), {total_base_paths} total paths."
+            f"Baseline: {n_runs} run(s) saved and added to history. "
+            f"Total: {len(base_history)} run(s), {total_base_paths} paths."
         )
 
     mc: MetricsCollector | None = st.session_state.get("mc")
     paths: list = st.session_state.get("paths", [])
 
+    # ── Saved Run Browser (always visible) ────────────────────────────────────
+    active_farg = st.session_state.get("_active_farg_file", "")
+    active_base = st.session_state.get("_active_base_file", "")
+    active_parts = []
+    if active_farg:
+        active_parts.append(f"FARG: `{active_farg}`")
+    if active_base:
+        active_parts.append(f"Baseline: `{active_base}`")
+    browser_title = (
+        "📂 Saved Run History"
+        + (f" — viewing {', '.join(active_parts)}" if active_parts else "")
+    )
+    with st.expander(browser_title, expanded=(mc is None)):
+        _panel_run_browser()
+
     if mc is None:
-        st.info("Configure and click **Run Simulation** to begin.")
+        st.info(
+            "Click **Run FARG** or **Run Baseline** in the sidebar to start a new run, "
+            "or load a saved run from the history above."
+        )
         return
 
     ticks_available = len(mc.snapshots)
