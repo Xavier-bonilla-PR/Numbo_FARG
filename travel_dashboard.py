@@ -94,8 +94,8 @@ def run_simulation(use_mock: bool, max_ticks: int):
     # call that baseline uses, so scores are directly comparable.
     farg_scores: dict = {}
     for pc in paths:
-        pid  = pc.path_id if isinstance(pc, GoalReached) else pc.taggee.path_id
-        legs = pc.legs    if isinstance(pc, GoalReached) else pc.taggee.legs
+        pid  = pc.path_id
+        legs = pc.legs
         score = counting.evaluate_path(f"farg-{pid}", legs, activation=0.5)
         if score is not None:
             farg_scores[pid] = score
@@ -558,11 +558,9 @@ def chart_exploration_sankey(tree: dict) -> go.Figure:
 def panel_path_comparison(paths: list) -> None:
     """Side-by-side cards for each complete path.
 
-    Accepts GoalReached tags (canvas-chain completions with .path_id, .legs,
-    .path) as well as legacy PathComplete tags (ImCell-based, with .taggee).
+    Expects GoalReached tags (canvas-chain completions) with .path_id, .legs,
+    and .path attributes — the type returned by run_loop().
     """
-    from tags import GoalReached
-
     if not paths:
         st.warning("No complete paths found.")
         return
@@ -571,14 +569,8 @@ def panel_path_comparison(paths: list) -> None:
     for i, pc in enumerate(paths):
         col = cols[i % len(cols)]
         with col:
-            # Resolve fields from either tag type
-            if isinstance(pc, GoalReached):
-                path_id = pc.path_id
-                legs = pc.legs
-            else:
-                # Legacy PathComplete: taggee is an ImCell
-                path_id = pc.taggee.path_id
-                legs = pc.taggee.legs
+            path_id = pc.path_id
+            legs = pc.legs
 
             st.markdown(f"### Path {path_id}")
             total_h = sum(l.duration_hours for l in legs)
@@ -623,10 +615,7 @@ def chart_score_vs_hours(farg_paths: list, farg_scores: dict, base_run) -> go.Fi
     # ── FARG trace ────────────────────────────────────────────────────────────
     f_x, f_y, f_text = [], [], []
     for pc in farg_paths:
-        if isinstance(pc, GoalReached):
-            pid, legs = pc.path_id, pc.legs
-        else:
-            pid, legs = pc.taggee.path_id, pc.taggee.legs
+        pid, legs = pc.path_id, pc.legs
         hours = sum(l.duration_hours for l in legs)
         score = farg_scores.get(pid)
         if score is None:
@@ -788,10 +777,7 @@ def panel_farg_vs_baseline(farg_paths: list, farg_scores: dict,
     # ── Derive secondary data ─────────────────────────────────────────────────
     farg_scored_paths = []
     for pc in farg_paths:
-        if isinstance(pc, GoalReached):
-            pid, legs = pc.path_id, pc.legs
-        else:
-            pid, legs = pc.taggee.path_id, pc.taggee.legs
+        pid, legs = pc.path_id, pc.legs
         if pid in farg_scores:
             farg_scored_paths.append((pid, legs))
 
@@ -889,10 +875,7 @@ def panel_farg_vs_baseline(farg_paths: list, farg_scores: dict,
         if not farg_paths:
             st.warning("No FARG paths — run the FARG simulation first.")
         for pc in farg_paths:
-            if isinstance(pc, GoalReached):
-                pid, legs, path = pc.path_id, pc.legs, pc.path
-            else:
-                pid, legs, path = pc.taggee.path_id, pc.taggee.legs, pc.path
+            pid, legs, path = pc.path_id, pc.legs, pc.path
             score = farg_scores.get(pid)
             score_str = f"  score: **{score:.2f}**" if score is not None else ""
             with st.container(border=True):
@@ -1156,7 +1139,7 @@ def panel_multi_run_stats(farg_history: list, base_history: list) -> None:
             for pc in run["paths"]:
                 total_farg_paths += 1
                 farg_unique_routes.add(pc.path)
-                legs = pc.legs if isinstance(pc, GoalReached) else pc.taggee.legs
+                legs = pc.legs
                 if legs and legs[0].to_loc not in baseline_first_cities:
                     novel_paths.append(pc)
         for run in base_history:
@@ -1165,7 +1148,7 @@ def panel_multi_run_stats(farg_history: list, base_history: list) -> None:
 
         novel_first_cities = set()
         for pc in novel_paths:
-            legs = pc.legs if isinstance(pc, GoalReached) else pc.taggee.legs
+            legs = pc.legs
             if legs:
                 novel_first_cities.add(legs[0].to_loc)
 

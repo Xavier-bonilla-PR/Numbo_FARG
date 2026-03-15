@@ -147,12 +147,14 @@ def get_complete_paths(ws) -> List[GoalReached]:
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
-def run_loop(ws, slipnet, logger=None, max_ticks: int = MAX_TICKS) -> List[PathComplete]:
+def run_loop(ws, slipnet, logger=None, max_ticks: int = MAX_TICKS) -> List[GoalReached]:
     """Run the stochastic heartbeat.
 
-    Returns a list of PathComplete tags (one per discovered path).
+    Returns a list of GoalReached tags (one per committed canvas chain that
+    reached the goal).  PathComplete tags (ImCell-level) are a separate
+    population used internally by detectors; they are not returned here.
     """
-    complete: List[PathComplete] = []
+    complete: List[GoalReached] = []
 
     for tick in range(max_ticks):
 

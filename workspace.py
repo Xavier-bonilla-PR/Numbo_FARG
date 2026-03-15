@@ -124,10 +124,16 @@ class Workspace:
         return elem
 
     def _find_existing(self, elem: Any) -> Optional[Any]:
-        """Return the canonical workspace copy of elem if present."""
-        # Direct dict lookup (works for frozen dataclasses)
-        if elem in self.elements:
-            return elem
+        """Return the canonical workspace copy of elem if present.
+
+        Iterates the elements dict to return the *stored* key rather than
+        the caller's copy, making this the single deduplication chokepoint.
+        Extend here (e.g. with elem.structurally_matches(stored)) to add
+        fuzzy / structural dedup without touching add().
+        """
+        for stored in self.elements:
+            if stored == elem:
+                return stored
         return None
 
     # ── Edge management ───────────────────────────────────────────────────────

@@ -70,6 +70,10 @@ class Want:
     def go(self, ws, slipnet) -> None:
         modes = slipnet.query_modes(self.from_loc, self.to_loc)
         log.debug("Want.go: modes=%s", modes)
+        # All SuggestModes spawned by this Want share an origin_id so that
+        # they compete with each other but not with continuation agents from
+        # other canvas chains that happen to visit the same city.
+        origin = f"{self.from_loc}→{self.to_loc}"
         for mode in modes:
             pid = ws.new_path_id()
             sm = SuggestMode(
@@ -77,6 +81,7 @@ class Want:
                 current_loc=self.from_loc,
                 goal=self.to_loc,
                 mode=mode,
+                origin_id=origin,
             )
             ws.add(sm, builder=self)
         ws.tag(GoIsDone(taggee=self))
@@ -98,14 +103,18 @@ class SuggestMode:
       4. Build SuggestRoute with the returned leg.
       5. Tag self GoIsDone.
 
-    Antipathy: SuggestMode agents at the SAME current_loc with DIFFERENT
-    modes (and different path IDs) compete with each other.
+    Antipathy: SuggestMode agents compete only when they share the same
+    origin_id — meaning they were spawned from the same decision point
+    (e.g., all modes offered by the same Want).  Continuation agents
+    spawned by SuggestRoute.act() leave origin_id empty and never compete
+    with agents from unrelated canvas chains.
     """
 
     path_id: str
     current_loc: str
     goal: str
     mode: str
+    origin_id: str = ""   # shared among sibling agents from the same decision point
 
     def can_go(self, ws) -> bool:
         return (
@@ -167,11 +176,15 @@ class SuggestMode:
         ws.tag(GoIsDone(taggee=self))
 
     def has_antipathy_to(self, other) -> bool:
+        # Compete only with sibling agents that share the same origin_id,
+        # i.e. agents spawned from the same decision point.  Continuation
+        # agents (origin_id="") never inhibit agents on other canvas chains.
         return (
             isinstance(other, SuggestMode)
+            and self.origin_id != ""
+            and other.origin_id == self.origin_id
             and other.current_loc == self.current_loc
             and other.mode != self.mode
-            and other.path_id != self.path_id
         )
 
 
@@ -251,24 +264,24 @@ class SuggestRoute:
                         legs=branch_legs + (self.proposed_leg,),
                         current_loc=self.proposed_leg.to_loc,
                     )
-                    # Commit historical legs + proposed leg to canvas for new_pid
-                    # so future reconstruction from canvas works correctly.
+                    # Commit historical (already-canonical) legs directly so
+                    # that canvas reconstruction works for the new branch.
                     for bl in branch_legs:
                         ws.commit_leg(new_pid, bl)
-                    ws.commit_leg(new_pid, self.proposed_leg)
+                    # Route the proposed leg through a proper SuggestRoute so
+                    # its canvas commit is visible to the metrics survival
+                    # funnel, ActIsDone logic, and post-act() downboost.
+                    branch_sr = SuggestRoute(
+                        path_id=new_pid,
+                        current_loc=self.proposed_leg.from_loc,
+                        goal=self.goal,
+                        mode=self.mode,
+                        proposed_leg=self.proposed_leg,
+                    )
+                    ws.add(branch_sr, builder=self, init_a=0.5)
+                    ws.tag(GoIsDone(taggee=branch_sr))  # ready to act() next tick
                     ws.add(new_imcell, builder=self)
                     ws.add(SeekEvidence(path_id=new_pid, imcell=new_imcell), builder=self)
-                    if self.proposed_leg.to_loc != self.goal:
-                        ws.add(
-                            SuggestMode(
-                                path_id=new_pid,
-                                current_loc=self.proposed_leg.to_loc,
-                                goal=self.goal,
-                                mode=self.mode,
-                            ),
-                            builder=self,
-                            init_a=0.5,
-                        )
                     log.debug(
                         "SuggestRoute.go: branched %s -> %s at %s -> %s",
                         self.path_id, new_pid,

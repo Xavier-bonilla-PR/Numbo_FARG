@@ -63,6 +63,8 @@ class TickSnapshot:
     edges: List[Tuple[str, str, float]] = field(default_factory=list)
     # type label of the agent chosen this tick (None if no agent chosen)
     chosen_type: Optional[str] = None
+    # path_id -> committed canvas leg count at this tick (for depth-aware temperature)
+    canvas_sizes: Dict[str, int] = field(default_factory=dict)
 
 
 # ── MetricsCollector ──────────────────────────────────────────────────────────
@@ -83,7 +85,7 @@ class MetricsCollector:
         self.llm_legs: List[LLMLegRecord] = []
         self.imcell_births: List[ImCellBirthRecord] = []
         self._seen_suggest_routes: set = set()
-        self._seen_imcells: set = set()   # id(imcell) → avoid double-recording
+        self._seen_imcells: set = set()   # (path_id, legs) tuples — immune to id() recycling
         self._canvas_prev: int = 0
 
     # ── Element introspection helpers ─────────────────────────────────────────
@@ -171,16 +173,21 @@ class MetricsCollector:
             self._canvas_prev = canvas_now
 
         # ── 3b. Track ImCell births ────────────────────────────────────────────
+        # Key by (path_id, legs) rather than id(elem): id() values are recycled
+        # after garbage collection, which would cause a new ImCell to be silently
+        # skipped if it gets the same id() as a previously pruned one.
         from canvas import ImCell as _ImCell
         for elem in ws.elements:
-            if isinstance(elem, _ImCell) and id(elem) not in self._seen_imcells:
-                self._seen_imcells.add(id(elem))
-                self.imcell_births.append(ImCellBirthRecord(
-                    birth_tick=tick,
-                    path_id=elem.path_id,
-                    depth=len(elem.legs),
-                    legs=elem.legs,
-                ))
+            if isinstance(elem, _ImCell):
+                imcell_key = (elem.path_id, elem.legs)
+                if imcell_key not in self._seen_imcells:
+                    self._seen_imcells.add(imcell_key)
+                    self.imcell_births.append(ImCellBirthRecord(
+                        birth_tick=tick,
+                        path_id=elem.path_id,
+                        depth=len(elem.legs),
+                        legs=elem.legs,
+                    ))
 
         # ── 4. Activations snapshot ────────────────────────────────────────────
         activations: Dict[str, Tuple[str, float]] = {}
@@ -208,6 +215,11 @@ class MetricsCollector:
                 w = data.get("weight", 0.0)
                 edges.append((uid, vid, w))
 
+        # ── 8. Per-path canvas leg counts (needed for depth-aware temperature) ──
+        canvas_sizes: Dict[str, int] = {}
+        for cell in ws.canvas:
+            canvas_sizes[cell.path_id] = canvas_sizes.get(cell.path_id, 0) + 1
+
         self.snapshots.append(TickSnapshot(
             tick=tick,
             activations=activations,
@@ -218,6 +230,7 @@ class MetricsCollector:
             complete_count=len(complete) if complete else 0,
             edges=edges,
             chosen_type=self._elem_type(chosen) if chosen else None,
+            canvas_sizes=canvas_sizes,
         ))
 
     def log_final(self, paths) -> None:
@@ -277,18 +290,23 @@ class MetricsCollector:
         }
 
     def temperature_series(self) -> List[Tuple[int, str, float, float]]:
-        """Return [(tick, path_id, activation, temperature)] for all SuggestMode firings.
+        """Return [(tick, elem_id, activation, temperature)] for all SuggestMode firings.
 
-        Temperature is derived from the activation recorded at each tick where
-        a SuggestMode was the chosen agent (activation -> temperature via slipnet formula).
+        Temperature is derived from activation AND canvas depth recorded at each
+        tick where a SuggestMode was the chosen agent, matching the formula used
+        by the actual LLM calls (temperature_for_activation(a, depth=canvas_depth)).
         """
+        import re
         from slipnet import temperature_for_activation
         result = []
         for snap in self.snapshots:
             if snap.chosen_type == "SuggestMode":
-                # Find all SuggestMode activations at this tick
                 for eid, (etype, a) in snap.activations.items():
                     if etype == "SuggestMode":
-                        temp = temperature_for_activation(a)
+                        # elem_id format: "SM[path-N/mode]" — extract path_id
+                        m = re.search(r"SM\[([^/\]]+)/", eid)
+                        pid = m.group(1) if m else ""
+                        depth = snap.canvas_sizes.get(pid, 0)
+                        temp = temperature_for_activation(a, depth=depth)
                         result.append((snap.tick, eid, a, temp))
         return result
